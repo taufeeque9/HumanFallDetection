@@ -5,7 +5,7 @@ Requirement: OpenPifPaf (pip3 install openpifpaf) <br>
 
 ## Usage
 With GPU (requires CUDA): python3 posedetector.py  <br>
-With CPU : python3 posedetector.py --disable_cuda <br>
+With CPU : python3 posedetector.py<br>
 It uses resnet50 as the default model. To use other model specify with --checkpoint <br>
 Ex: python3 posedetector.py --checkpoint=resnet18 <br>
 

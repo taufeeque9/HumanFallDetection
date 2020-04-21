@@ -35,7 +35,7 @@ def cli():
                         help='Path to the video file.')
     parser.add_argument('--debug', default=False, action='store_true',
                         help='debug messages and autoreload')
-    parser.add_argument('--disable_cuda', default=False, action='store_true',
+    parser.add_argument('--disable_cuda', default=True, action='store_true',
                         help='disables cuda support and runs from cpu')
 
     vis_args = parser.add_argument_group('Visualisation')
