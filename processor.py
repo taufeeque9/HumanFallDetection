@@ -25,7 +25,7 @@ class Processor(object):
         if (im.size[0] > im.size[1]) != (target_wh[0] > target_wh[1]):
             target_wh = (target_wh[1], target_wh[0])
         if im.size[0] != target_wh[0] or im.size[1] != target_wh[1]:
-            print(f'!!! have to resize image to {target_wh} from {im.size}')
+            # print(f'!!! have to resize image to {target_wh} from {im.size}')
             im = im.resize(target_wh, PIL.Image.BICUBIC)
         width_height = im.size
 
@@ -33,7 +33,7 @@ class Processor(object):
         preprocess = openpifpaf.transforms.EVAL_TRANSFORM
         processed_image_cpu, _, __ = preprocess(im, [], None)
         processed_image = processed_image_cpu.contiguous().to(self.device, non_blocking=True)
-        print(f'preprocessing time {time.time() - start}')
+        # print(f'preprocessing time {time.time() - start}')
 
         all_fields = self.processor.fields(torch.unsqueeze(processed_image.float(), 0))[0]
         keypoint_sets, scores = self.processor.keypoint_sets(all_fields)
