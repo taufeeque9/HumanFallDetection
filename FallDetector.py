@@ -47,8 +47,8 @@ class FallDetector:
                             help='Path to the video file.')
         parser.add_argument('--debug', default=False, action='store_true',
                             help='debug messages and autoreload')
-        parser.add_argument('--disable_cuda', default=False, action='store_true',
-                            help='disables cuda support and runs from cpu')
+        parser.add_argument('--enable_cuda', default=False, action='store_true',
+                            help='enables cuda support and runs from gpu')
 
         vis_args = parser.add_argument_group('Visualisation')
         vis_args.add_argument('--joints', default=True, action='store_true',
@@ -71,8 +71,9 @@ class FallDetector:
 
         # Add args.device
         args.device = torch.device('cpu')
+        print(args.enable_cuda)
         args.pin_memory = False
-        if not args.disable_cuda and torch.cuda.is_available():
+        if args.enable_cuda and torch.cuda.is_available():
             args.device = torch.device('cuda')
             args.pin_memory = True
 
