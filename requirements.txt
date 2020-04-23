@@ -1,0 +1,3 @@
+Pillow==7.1.1
+openpifpaf==0.10.1
+opencv-python==4.2.0.34
