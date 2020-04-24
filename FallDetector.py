@@ -14,19 +14,23 @@ import multiprocessing
 from typing import List
 from visual import CocoPart, write_on_image, visualise
 from processor import Processor
+from helpers import pop_and_add
 
 
 class FallDetector:
-    def __init__(self):
+    def __init__(self,t=5):
         self.manager = multiprocessing.Manager()
         self.M = self.manager.list()
         p1 = multiprocessing.Process(target=self.main)
         p2 = multiprocessing.Process(target=self.alg2)
+        self.consecutive_frames=int(t)
+        self.counter=self.manager.Value('i',0)
         print('processes declared')
         p1.start()
         p2.start()
         p1.join()
         p2.join()
+
 
     def cli(self):
         parser = argparse.ArgumentParser(
@@ -173,6 +177,8 @@ class FallDetector:
 
         while time.time() - t0 < 30:
             frame += 1
+            self.counter.value+=1
+            print(self.counter.value)
 
             ret_val, img = cam.read()
             if img is None:
@@ -194,8 +200,11 @@ class FallDetector:
                 'width_height': width_height,
             } for i, (keypoints, score) in enumerate(zip(keypoint_sets, scores))]
 
-            self.M.append(keypoint_sets)
-            # print(len(self.M))
+            if(len(self.M) < self.consecutive_frames):
+                self.M.append(keypoint_sets)
+            else:
+                self.M=pop_and_add(self.M,keypoint_sets)
+            
 
             img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
                             vis_skeleton=args.skeleton)
@@ -210,12 +219,13 @@ class FallDetector:
             # skeleton_painter.annotations(cv2, pred)
 
     def alg2(self):
-        i = 0
+        counter2 =0
         while True:
             print(len(self.M))
-            if len(self.M) > i:
-                print(self.M[i])
-                i += 1
+            if  counter2 < self.counter.value:
+                counter2 += 1
+                if len(self.M)<self.consecutive_frames:
+                    print("Collecting Frames")
                 time.sleep(0.1)
             else:
                 print('waiting...')
