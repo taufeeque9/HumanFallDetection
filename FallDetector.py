@@ -18,19 +18,20 @@ from helpers import pop_and_add
 
 
 class FallDetector:
-    def __init__(self,t=5):
+    def __init__(self, t=5):
         self.manager = multiprocessing.Manager()
+        self.fin = self.manager.Value('i', False)
         self.M = self.manager.list()
         p1 = multiprocessing.Process(target=self.main)
-        p2 = multiprocessing.Process(target=self.alg2)
-        self.consecutive_frames=int(t)
-        self.counter=self.manager.Value('i',0)
+        # p2 = multiprocessing.Process(target=self.alg2)
+        self.consecutive_frames = int(t)
+        self.counter = self.manager.Value('i', 0)
         print('processes declared')
         p1.start()
-        p2.start()
-        p1.join()
-        p2.join()
-
+        self.alg2()
+        # p2.start()
+        # p1.join()
+        # p2.join()
 
     def cli(self):
         parser = argparse.ArgumentParser(
@@ -174,10 +175,11 @@ class FallDetector:
         frame = 0
         fps = 0
         t0 = time.time()
+        cv2.namedWindow('Detected Pose')
 
         while time.time() - t0 < 30:
             frame += 1
-            self.counter.value+=1
+            self.counter.value += 1
             print(self.counter.value)
 
             ret_val, img = cam.read()
@@ -185,7 +187,8 @@ class FallDetector:
                 print('no more images captured')
                 break
 
-            if cv2.waitKey(1) == 27:
+            if cv2.waitKey(1) == 27 or cv2.getWindowProperty('Detected Pose', cv2.WND_PROP_VISIBLE) < 1:
+                self.fin.value = True
                 break
 
             img = cv2.resize(img, (width, height))
@@ -203,8 +206,7 @@ class FallDetector:
             if(len(self.M) < self.consecutive_frames):
                 self.M.append(keypoint_sets)
             else:
-                self.M=pop_and_add(self.M,keypoint_sets)
-            
+                pop_and_add(self.M, keypoint_sets)
 
             img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
                             vis_skeleton=args.skeleton)
@@ -215,16 +217,19 @@ class FallDetector:
             img = write_on_image(
                 img=img, text=f"Avg FPS {frame//(time.time()-t0)}", color=[0, 0, 0])
 
+            # print(f"...............{cv2.getWindowProperty('Detected Pose', 1)}................")
+
             cv2.imshow('Detected Pose', img)
+
             # skeleton_painter.annotations(cv2, pred)
 
     def alg2(self):
-        counter2 =0
-        while True:
+        counter2 = 0
+        while not self.fin.value:
             print(len(self.M))
-            if  counter2 < self.counter.value:
+            if counter2 < self.counter.value:
                 counter2 += 1
-                if len(self.M)<self.consecutive_frames:
+                if len(self.M) < self.consecutive_frames:
                     print("Collecting Frames")
                 time.sleep(0.1)
             else:
