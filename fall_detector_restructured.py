@@ -73,15 +73,18 @@ class FallDetector:
     def begin(self):
         queue = mp.Queue()
         print("Queue Made")
-        process1 = mp.Process(target=extract_keypoints, args=(
-            queue, self.args, self.consecutive_frames))
-        print("P1 made")
-        process2 = mp.Process(target=alg2, args=(queue, self.consecutive_frames))
-        print("P2 made")
+        process1 = mp.Process(target=extract_keypoints,
+                              args=(queue, self.args, self.consecutive_frames))
         process1.start()
-        process2.start()
+        print("P1 made")
+        if not self.args.coco_points:
+            process2 = mp.Process(target=alg2, args=(queue, self.consecutive_frames))
+            print("P2 made")
+            process2.start()
+
         process1.join()
-        process2.join()
+        if not self.args.coco_points:
+            process2.join()
 
 
 if __name__ == "__main__":

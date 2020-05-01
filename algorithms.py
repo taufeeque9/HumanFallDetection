@@ -3,6 +3,7 @@ import csv
 import logging
 import base64
 import time
+import numpy as np
 import matplotlib.pyplot as plt
 from visual import write_on_image, visualise
 from processor import Processor
@@ -21,7 +22,9 @@ def alg2(queue, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     while True:
         if queue.qsize() > 0:
             curr = queue.get()
-            if is_valid(curr[-1][0]['coordinates']):
+            if curr is None:
+                break
+            if len(curr[-1]) > 0 and is_valid(curr[-1][0]['coordinates']):
                 if is_valid(curr[-2][0]['coordinates']):
                     re.append(get_rot_energy(
                         curr[-2][0]['coordinates'], curr[-1][0]['coordinates']))
@@ -35,11 +38,13 @@ def alg2(queue, consecutive_frames=DEFAULT_CONSEC_FRAMES):
                     re.append(0)
             else:
                 re.append(0)
-        x = range(len(re))
-        line.set_xdata(x)
-        line.set_ydata(re)
+
+        x = np.linspace(1, len(re), len(re))
+        plt.clf()
+        axes = plt.gca()
+        line, = axes.plot(x, re, 'r-')
         plt.draw()
-        plt.pause(0.01)
+        plt.pause(1e-17)
 
     plt.show()
 
@@ -99,7 +104,7 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     t0 = time.time()
     cv2.namedWindow('Detected Pose')
 
-    while time.time() - t0 < 10:
+    while True:
 
         ret_val, img = cam.read()
         if img is None:
