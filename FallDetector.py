@@ -1,3 +1,8 @@
+from helpers import pop_and_add
+from processor import Processor
+from visual import CocoPart, write_on_image, visualise
+from typing import List
+from inv_pendulum import get_kp, is_valid, get_rot_energy
 import io
 import numpy as np
 import openpifpaf
@@ -10,11 +15,10 @@ import csv
 import logging
 import time
 import multiprocessing
-
-from typing import List
-from visual import CocoPart, write_on_image, visualise
-from processor import Processor
-from helpers import pop_and_add
+import matplotlib.pyplot as plt
+import math
+# import matplotlib
+# matplotlib.use('Agg')
 
 
 class FallDetector:
@@ -22,13 +26,15 @@ class FallDetector:
         self.manager = multiprocessing.Manager()
         self.fin = self.manager.Value('i', False)
         self.M = self.manager.list()
-        p1 = multiprocessing.Process(target=self.main)
+        self.q = self.manager.Queue()
+        # p1 = multiprocessing.Process(target=self.main)
         # p2 = multiprocessing.Process(target=self.alg2)
         self.consecutive_frames = int(t)
         self.counter = self.manager.Value('i', 0)
-        print('processes declared')
-        p1.start()
-        self.alg2()
+        self.main()
+        # print('processes declared')
+        # p1.start()
+        # self.alg2()
         # p2.start()
         # p1.join()
         # p2.join()
@@ -60,6 +66,8 @@ class FallDetector:
                               help='Draw joint\'s keypoints on the output video.')
         vis_args.add_argument('--skeleton', default=True, action='store_true',
                               help='Draw skeleton on the output video.')
+        vis_args.add_argument('--fivepoints', default=False, action='store_true',
+                              help='Visualise the 5 points inverted pendulum model.')
         vis_args.add_argument('--save-output', default=False, action='store_true',
                               help='Save the result in a video file.')
         vis_args.add_argument('--fps', default=20, type=int,
@@ -125,6 +133,7 @@ class FallDetector:
         args = self.cli()
 
         # Choose video source
+        print('1')
         if args.video is None:
             logging.debug('Video source: webcam')
             cam = cv2.VideoCapture(0)
@@ -175,9 +184,15 @@ class FallDetector:
         frame = 0
         fps = 0
         t0 = time.time()
+        print('3')
         cv2.namedWindow('Detected Pose')
-
-        while time.time() - t0 < 30:
+        print('4')
+        re = []
+        x = []
+        plt.ion()
+        axes = plt.gca()
+        line, = axes.plot(x, re, 'r-')
+        while True:
             frame += 1
             self.counter.value += 1
             print(self.counter.value)
@@ -196,23 +211,38 @@ class FallDetector:
             keypoint_sets, scores, width_height = processor_singleton.single_image(
                 b64image=base64.b64encode(cv2.imencode('.jpg', img)[1]).decode('UTF-8')
             )
-            keypoint_sets = [{
-                'coordinates': keypoints.tolist(),
-                'detection_id': i,
-                'score': score,
-                'width_height': width_height,
-            } for i, (keypoints, score) in enumerate(zip(keypoint_sets, scores))]
+
+            if len(keypoint_sets) == 0:
+                continue
+
+            if args.fivepoints:
+                keypoint_sets = [{
+                    'coordinates': get_kp(keypoints.tolist()),
+                    'detection_id': i,
+                    'score': score,
+                    'width_height': width_height,
+                } for i, (keypoints, score) in enumerate(zip(keypoint_sets, scores))]
+            else:
+                keypoint_sets = [{
+                    'coordinates': keypoints.tolist(),
+                    'detection_id': i,
+                    'score': score,
+                    'width_height': width_height,
+                } for i, (keypoints, score) in enumerate(zip(keypoint_sets, scores))]
+
+            # print(keypoint_sets[0]['coordinates'][3], keypoint_sets[0]['coordinates'][4])
 
             if(len(self.M) < self.consecutive_frames):
                 self.M.append(keypoint_sets)
             else:
                 pop_and_add(self.M, keypoint_sets)
+                self.q.put([i[0]['coordinates'] for i in self.M])
 
             img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
-                            vis_skeleton=args.skeleton)
+                            vis_skeleton=args.skeleton, FivePointsOn=args.fivepoints)
 
-            self.write_to_csv(frame_number=frame, humans=keypoint_sets,
-                              width=width, height=height, csv_fp=args.csv_path)
+            # self.write_to_csv(frame_number=frame, humans=keypoint_sets,
+            #                   width=width, height=height, csv_fp=args.csv_path)
 
             img = write_on_image(
                 img=img, text=f"Avg FPS {frame//(time.time()-t0)}", color=[0, 0, 0])
@@ -221,20 +251,58 @@ class FallDetector:
 
             cv2.imshow('Detected Pose', img)
 
-            # skeleton_painter.annotations(cv2, pred)
+            ######################### alg2 ############################
+
+            if self.q.qsize() > 0:
+                curr = self.q.get()
+                if is_valid(curr[-1]):
+                    if is_valid(curr[-2]):
+                        re.append(get_rot_energy(curr[-2], curr[-1]))
+                    elif is_valid(curr[-3]):
+                        re.append(get_rot_energy(curr[-3], curr[-1], 2))
+                    elif is_valid(curr[-4]):
+                        re.append(get_rot_energy(curr[-4], curr[-1], 3))
+                    else:
+                        re.append(0)
+                else:
+                    re.append(0)
+                print('re: ', re[-1])
+                x = np.linspace(1, len(re), len(re))
+                # print(x)
+                print(re)
+                plt.clf()
+                axes = plt.gca()
+                line, = axes.plot(x, re, 'r-')
+                plt.draw()
+                plt.pause(1e-17)
 
     def alg2(self):
-        counter2 = 0
+        re = []
+        x = []
+        plt.show()
+        axes = plt.gca()
+        line, = axes.plot(x, re, 'r-')
         while not self.fin.value:
-            print(len(self.M))
-            if counter2 < self.counter.value:
-                counter2 += 1
-                if len(self.M) < self.consecutive_frames:
-                    print("Collecting Frames")
-                time.sleep(0.1)
-            else:
-                print('waiting...')
-                time.sleep(0.5)
+            if self.q.qsize() > 0:
+                curr = self.q.get()
+                if is_valid(curr[-1]):
+                    if is_valid(curr[-2]):
+                        re.append(get_rot_energy(curr[-2], curr[-1]))
+                    elif is_valid(curr[-3]):
+                        re.append(get_rot_energy(curr[-3], curr[-1]))
+                    elif is_valid(curr[-4]):
+                        re.append(get_rot_energy(curr[-4], curr[-1]))
+                    else:
+                        re.append(0)
+                else:
+                    re.append(0)
+            x = range(len(re))
+            line.set_xdata(x)
+            line.set_ydata(re)
+            plt.draw()
+            plt.pause(0.01)
+
+        plt.show()
 
 
 if __name__ == "__main__":

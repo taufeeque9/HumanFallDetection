@@ -1,43 +1,52 @@
-import io
-import numpy as np
-import openpifpaf
-import PIL
-import torch
 import cv2
-import argparse
 import csv
 import logging
 import base64
 import time
-import multiprocessing
-
-from typing import List
-from visual import CocoPart, write_on_image, visualise
+import matplotlib.pyplot as plt
+from visual import write_on_image, visualise
 from processor import Processor
 from helpers import pop_and_add
 from default_params import *
 from writer import write_to_csv
-def alg2(queue,consecutive_frames=DEFAULT_CONSEC_FRAMES):
-    counter2 = 0
+from inv_pendulum import *
+
+
+def alg2(queue, consecutive_frames=DEFAULT_CONSEC_FRAMES):
+    re = []
+    x = []
+    plt.show()
+    axes = plt.gca()
+    line, = axes.plot(x, re, 'r-')
     while True:
-        if queue.empty():
-        	continue
+        if queue.qsize() > 0:
+            curr = queue.get()
+            if is_valid(curr[-1][0]['coordinates']):
+                if is_valid(curr[-2][0]['coordinates']):
+                    re.append(get_rot_energy(
+                        curr[-2][0]['coordinates'], curr[-1][0]['coordinates']))
+                elif is_valid(curr[-3][0]['coordinates']):
+                    re.append(get_rot_energy(
+                        curr[-3][0]['coordinates'], curr[-1][0]['coordinates']))
+                elif is_valid(curr[-4][0]['coordinates']):
+                    re.append(get_rot_energy(
+                        curr[-4][0]['coordinates'], curr[-1][0]['coordinates']))
+                else:
+                    re.append(0)
+            else:
+                re.append(0)
+        x = range(len(re))
+        line.set_xdata(x)
+        line.set_ydata(re)
+        plt.draw()
+        plt.pause(0.01)
 
-        M = queue.get()
-        if M is None:
-        	print("We are done")
-        	break
+    plt.show()
 
 
-
-        counter2+=1
-        print(counter2)
-
-        time.sleep(0.15)
-
-def extract_keypoints(queue,args,consecutive_frames=DEFAULT_CONSEC_FRAMES):
+def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     print('main started')
-    M=[]
+    M = []
     if args.video is None:
         logging.debug('Video source: webcam')
         cam = cv2.VideoCapture(0)
@@ -108,12 +117,21 @@ def extract_keypoints(queue,args,consecutive_frames=DEFAULT_CONSEC_FRAMES):
         keypoint_sets, scores, width_height = processor_singleton.single_image(
             b64image=base64.b64encode(cv2.imencode('.jpg', img)[1]).decode('UTF-8')
         )
-        keypoint_sets = [{
-            'coordinates': keypoints.tolist(),
-            'detection_id': i,
-            'score': score,
-            'width_height': width_height,
-        } for i, (keypoints, score) in enumerate(zip(keypoint_sets, scores))]
+
+        if args.coco_points:
+            keypoint_sets = [{
+                'coordinates': keypoints.tolist(),
+                'detection_id': i,
+                'score': score,
+                'width_height': width_height,
+            } for i, (keypoints, score) in enumerate(zip(keypoint_sets, scores))]
+        else:
+            keypoint_sets = [{
+                'coordinates': get_kp(keypoints.tolist()),
+                'detection_id': i,
+                'score': score,
+                'width_height': width_height,
+            } for i, (keypoints, score) in enumerate(zip(keypoint_sets, scores))]
 
         if(len(M) < consecutive_frames):
             M.append(keypoint_sets)
@@ -122,10 +140,10 @@ def extract_keypoints(queue,args,consecutive_frames=DEFAULT_CONSEC_FRAMES):
             queue.put(M)
 
         img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
-                        vis_skeleton=args.skeleton)
+                        vis_skeleton=args.skeleton, CocoPointsOn=args.coco_points)
 
-        write_to_csv(frame_number=frame, humans=keypoint_sets,
-                          width=width, height=height, csv_fp=args.csv_path)
+        # write_to_csv(frame_number=frame, humans=keypoint_sets,
+        #              width=width, height=height, csv_fp=args.csv_path)
 
         img = write_on_image(
             img=img, text=f"Avg FPS {frame//(time.time()-t0)}", color=[0, 0, 0])
