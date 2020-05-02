@@ -40,6 +40,8 @@ class FallDetector:
                             help='disables cuda support and runs from gpu')
 
         vis_args = parser.add_argument_group('Visualisation')
+        vis_args.add_argument('--plot_graph', default=False, action='store_true',
+                              help='Plot the graph of features extracted from keypoints of pose.')
         vis_args.add_argument('--joints', default=True, action='store_true',
                               help='Draw joint\'s keypoints on the output video.')
         vis_args.add_argument('--skeleton', default=True, action='store_true',
@@ -78,7 +80,8 @@ class FallDetector:
         process1.start()
         print("P1 made")
         if not self.args.coco_points:
-            process2 = mp.Process(target=alg2, args=(queue, self.consecutive_frames))
+            process2 = mp.Process(target=alg2,
+                                  args=(queue, self.args.plot_graph, self.consecutive_frames))
             print("P2 made")
             process2.start()
 

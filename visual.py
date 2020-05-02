@@ -75,15 +75,14 @@ def visualise(img: np.ndarray, keypoint_sets: List, width: int, height: int, vis
 
     if vis_keypoints or vis_skeleton:
         for keypoints in keypoint_sets:
-            coords = keypoints['coordinates']
 
             if vis_skeleton:
                 for p1i, p2i, color in SKELETON_CONNECTIONS:
-                    if coords[p1i] is None or coords[p2i] is None:
+                    if keypoints[p1i] is None or keypoints[p2i] is None:
                         continue
 
-                    p1 = (int(coords[p1i][0] * width), int(coords[p1i][1] * height))
-                    p2 = (int(coords[p2i][0] * width), int(coords[p2i][1] * height))
+                    p1 = (int(keypoints[p1i][0] * width), int(keypoints[p1i][1] * height))
+                    p2 = (int(keypoints[p2i][0] * width), int(keypoints[p2i][1] * height))
 
                     if p1 == (0, 0) or p2 == (0, 0):
                         continue
@@ -91,7 +90,7 @@ def visualise(img: np.ndarray, keypoint_sets: List, width: int, height: int, vis
                     cv2.line(img=img, pt1=p1, pt2=p2, color=color, thickness=3)
 
             # if vis_keypoints:
-            #     for i, kps in enumerate(coords):
+            #     for i, kps in enumerate(keypoints):
             #         # Scale up joint coordinate
             #         p = (int(kps[0] * width), int(kps[1] * height))
             #
