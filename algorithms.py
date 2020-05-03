@@ -198,7 +198,7 @@ def alg2(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES):
                                 last2 = j
 
                     if last2 is None:
-                        pop_and_add(gf_matrix[i],-100,max_length_mat)
+                        pop_and_add(gf_matrix[i],0,max_length_mat)
                         continue
 
                     pop_and_add(gf_matrix[i], get_gf(ip_set[i][last2],ip_set[i][last1],ip_set[i][-1],
@@ -207,17 +207,10 @@ def alg2(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES):
 
                 else:
 
-                    pop_and_add(gf_matrix[i],-100,max_length_mat)
+                    pop_and_add(gf_matrix[i],0,max_length_mat)
 
 
 
-        if len(re_matrix) > 0:
-            plt.clf()
-            x = np.linspace(1, len(re_matrix[0]), len(re_matrix[0]))
-            axes = plt.gca()
-            line, = axes.plot(x, re_matrix[0], 'r-')
-            plt.draw()
-            plt.pause(1e-17)
 
         if len(gf_matrix) > 0:
             plt.clf()
