@@ -13,47 +13,7 @@ from writer import write_to_csv
 from inv_pendulum import *
 
 
-def alg2(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES):
-    re_matrix = []
-    max_length_mat = 101
-    if not plot_graph:
-        max_length_mat = consecutive_frames
-    ip_set = []
-
-    while True:
-        if queue.qsize() > 0:
-            new_frame = queue.get()
-            if new_frame is None:
-                break
-            match_ip(ip_set, new_frame, re_matrix, max_length_mat)
-            for i in range(len(ip_set)):
-                if ip_set[i][-1] is not None:
-                    if ip_set[i][-2] is not None:
-                        pop_and_add(re_matrix[i], get_rot_energy(
-                                    ip_set[i][-2], ip_set[i][-1]), max_length_mat - 1)
-                    elif ip_set[i][-3] is not None:
-                        pop_and_add(re_matrix[i], get_rot_energy(
-                                    ip_set[i][-3], ip_set[i][-1]), max_length_mat - 1)
-                    elif ip_set[i][-4] is not None:
-                        pop_and_add(re_matrix[i], get_rot_energy(
-                                    ip_set[i][-4], ip_set[i][-1]), max_length_mat - 1)
-                    else:
-                        pop_and_add(re_matrix[i], 0, max_length_mat)
-                else:
-                    pop_and_add(re_matrix[i], 0, max_length_mat)
-
-        if len(re_matrix) > 0:
-            plt.clf()
-            x = np.linspace(1, len(re_matrix[0]), len(re_matrix[0]))
-            axes = plt.gca()
-            line, = axes.plot(x, re_matrix[0], 'r-')
-            plt.draw()
-            plt.pause(1e-17)
-
-    # plt.show()
-
-
-def match_ip(ip_set, new_ips, re_matrix, consecutive_frames=DEFAULT_CONSEC_FRAMES):
+def match_ip(ip_set, new_ips, re_matrix, gf_matrix , consecutive_frames=DEFAULT_CONSEC_FRAMES):
     len_ip_set = len(ip_set)
     added = [False for _ in range(len_ip_set)]
     for new_ip in new_ips:
@@ -69,6 +29,8 @@ def match_ip(ip_set, new_ips, re_matrix, consecutive_frames=DEFAULT_CONSEC_FRAME
         if cmin[1] == -1:
             ip_set.append([None for _ in range(consecutive_frames - 1)] + [new_ip])
             re_matrix.append([])
+            gf_matrix.append([])
+
         else:
             added[cmin[1]] = True
             pop_and_add(ip_set[cmin[1]], new_ip, consecutive_frames)
@@ -80,6 +42,7 @@ def match_ip(ip_set, new_ips, re_matrix, consecutive_frames=DEFAULT_CONSEC_FRAME
             if ip_set[i] == [None for _ in range(consecutive_frames)]:
                 ip_set.pop(i)
                 re_matrix.pop(i)
+                gf_matrix.pop(i)
                 added.pop(i)
                 continue
         i += 1
@@ -87,7 +50,7 @@ def match_ip(ip_set, new_ips, re_matrix, consecutive_frames=DEFAULT_CONSEC_FRAME
 
 def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     print('main started')
-    # M = []
+
     if args.video is None:
         logging.debug('Video source: webcam')
         cam = cv2.VideoCapture(0)
@@ -187,8 +150,83 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
         img = write_on_image(
             img=img, text=f"Avg FPS {frame//(time.time()-t0)}", color=[0, 0, 0])
 
-        # print(f"...............{cv2.getWindowProperty('Detected Pose', 1)}................")
-
         cv2.imshow('Detected Pose', img)
 
     queue.put(None)
+
+
+def alg2(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES):
+    re_matrix = []
+    gf_matrix=[]
+    max_length_mat = 101
+    if not plot_graph:
+        max_length_mat = consecutive_frames
+    ip_set = []
+
+    while True:
+        if not queue.empty():
+            new_frame = queue.get()
+            if new_frame is None:
+                break
+            match_ip(ip_set, new_frame, re_matrix, gf_matrix,max_length_mat)
+            for i in range(len(ip_set)):
+                if ip_set[i][-1] is not None:
+                    if ip_set[i][-2] is not None:
+                        pop_and_add(re_matrix[i], get_rot_energy(
+                                    ip_set[i][-2], ip_set[i][-1]), max_length_mat - 1)
+                    elif ip_set[i][-3] is not None:
+                        pop_and_add(re_matrix[i], get_rot_energy(
+                                    ip_set[i][-3], ip_set[i][-1],2), max_length_mat - 1)
+                    elif ip_set[i][-4] is not None:
+                        pop_and_add(re_matrix[i], get_rot_energy(
+                                    ip_set[i][-4], ip_set[i][-1],3), max_length_mat - 1)
+                    else:
+                        pop_and_add(re_matrix[i], 0, max_length_mat)
+                else:
+                    pop_and_add(re_matrix[i], 0, max_length_mat)
+
+
+            for i in range(len(ip_set)):
+                if ip_set[i][-1] is not None:
+                    last1 = None
+                    last2 = None
+                    for j in [-2,-3,-4,-5]:
+                        if ip_set[i][j] is not None:
+                            if last1 is None:
+                                last1 = j
+                            elif last2 is None:
+                                last2 = j
+
+                    if last2 is None:
+                        pop_and_add(gf_matrix[i],-100,max_length_mat)
+                        continue
+
+                    pop_and_add(gf_matrix[i], get_gf(ip_set[i][last2],ip_set[i][last1],ip_set[i][-1],
+                                last1 - last2, -1 - last1), max_length_mat - 1)
+
+
+                else:
+
+                    pop_and_add(gf_matrix[i],-100,max_length_mat)
+
+
+
+        if len(re_matrix) > 0:
+            plt.clf()
+            x = np.linspace(1, len(re_matrix[0]), len(re_matrix[0]))
+            axes = plt.gca()
+            line, = axes.plot(x, re_matrix[0], 'r-')
+            plt.draw()
+            plt.pause(1e-17)
+
+        if len(gf_matrix) > 0:
+            plt.clf()
+            x = np.linspace(1, len(gf_matrix[0]), len(gf_matrix[0]))
+            axes = plt.gca()
+            line, = axes.plot(x, gf_matrix[0], 'r-')
+            plt.draw()
+            plt.pause(1e-17)
+
+
+
+
