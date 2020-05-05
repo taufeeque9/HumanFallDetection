@@ -79,14 +79,16 @@ def get_gf(ip0,ip1,ip2,t1=1,t2=1):
     H2 = ip2['H'] - ip2['N']
     H1 = ip1['H'] - ip1['N']
     H0 = ip0['H'] - ip0['N']
-    d1 = H1.dot(H1)
+    d1 = np.sqrt(H1.dot(H1))
     theta_1_plus_2_2 = get_angle_vertical(H2)
     theta_1_plus_2_1 = get_angle_vertical(H1) 
     theta_1_plus_2_0 = get_angle_vertical(H0)
+    # print("H: ",H0,H1,H2)
     N2 = ip2['N'] - ip2['B']
     N1 = ip1['N'] - ip1['B']
     N0 = ip0['N'] - ip0['B']
-    d2 = N1.dot(N1)
+    d2 = np.sqrt(N1.dot(N1))
+    # print("N: ",N0,N1,N2)
     theta_2_2 = get_angle_vertical(N2)
     theta_2_1 = get_angle_vertical(N1)
     theta_2_0 = get_angle_vertical(N0)
@@ -95,21 +97,26 @@ def get_gf(ip0,ip1,ip2,t1=1,t2=1):
     theta_1_1 = theta_1_plus_2_1 - theta_2_1
     theta_1_2 = theta_1_plus_2_2 - theta_2_2
 
+    # print("theta1: ",theta_1_0,theta_1_1,theta_1_2)
+    # print("theta2: ",theta_2_0,theta_2_1,theta_2_2)
 
     theta2 = theta_2_1
     theta1 = theta_1_1
 
-    del_theta1_0 = (theta_1_1 - theta_1_0)/t1
-    del_theta1_1 = (theta_1_2 - theta_1_1)/t2
+    del_theta1_0 = (get_angle(H0,H1))/t1
+    del_theta1_1 = (get_angle(H1,H2))/t2
 
-    del_theta2_0 = (theta_2_1 - theta_2_0)/t1
-    del_theta2_1 = (theta_2_2 - theta_2_1)/t2
+    del_theta2_0 = (get_angle(N0,N1))/t1
+    del_theta2_1 = (get_angle(N1,N2))/t2
 
     del_theta1 = 0.5 * ( del_theta1_1 + del_theta1_0 )
     del_theta2 = 0.5 * ( del_theta2_1 + del_theta2_0 )
 
     doubledel_theta1 = (del_theta1_1 - del_theta1_0) / 0.5*(t1 + t2)
     doubledel_theta2 = (del_theta2_1 - del_theta2_0) / 0.5*(t1 + t2)
+
+    # print("del_theta",del_theta1,del_theta2)
+    # print("doubledel_theta",doubledel_theta1,doubledel_theta2)
 
     Q_RD1 = 0
     Q_RD1 += m1 * d1* doubledel_theta1 * doubledel_theta1
@@ -123,6 +130,7 @@ def get_gf(ip0,ip1,ip2,t1=1,t2=1):
     Q_RD2 -= 2*m1*d1*d2*np.sin(theta1)*del_theta2*del_theta1 + m1*d1*d2*np.sin(theta1)*del_theta1*del_theta1
     Q_RD2 -= (m1 + m2)*g*d2*np.sin(theta2) + m1*g*d1*np.sin(theta1 + theta2)
 
+    # print("Energy: ", Q_RD1 + Q_RD2)
     return Q_RD1 + Q_RD2
 
 
