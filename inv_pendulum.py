@@ -66,13 +66,15 @@ def get_rot_energy(ip0, ip1, t=1):
     wsq = (get_angle(N0, N1)/t)**2
     energy += rsq*wsq
 
-    return energy/2
+    return (energy/2).item()
+
 
 def get_angle_vertical(v):
-    return np.math.atan2(v[0],v[1])
+    return np.math.atan2(v[0], v[1])
 
-def get_gf(ip0,ip1,ip2,t1=1,t2=1):
-    
+
+def get_gf(ip0, ip1, ip2, t1=1, t2=1):
+
     m1 = 1
     m2 = 1
     g = 10
@@ -81,7 +83,7 @@ def get_gf(ip0,ip1,ip2,t1=1,t2=1):
     H0 = ip0['H'] - ip0['N']
     d1 = np.sqrt(H1.dot(H1))
     theta_1_plus_2_2 = get_angle_vertical(H2)
-    theta_1_plus_2_1 = get_angle_vertical(H1) 
+    theta_1_plus_2_1 = get_angle_vertical(H1)
     theta_1_plus_2_0 = get_angle_vertical(H0)
     # print("H: ",H0,H1,H2)
     N2 = ip2['N'] - ip2['B']
@@ -103,14 +105,14 @@ def get_gf(ip0,ip1,ip2,t1=1,t2=1):
     theta2 = theta_2_1
     theta1 = theta_1_1
 
-    del_theta1_0 = (get_angle(H0,H1))/t1
-    del_theta1_1 = (get_angle(H1,H2))/t2
+    del_theta1_0 = (get_angle(H0, H1))/t1
+    del_theta1_1 = (get_angle(H1, H2))/t2
 
-    del_theta2_0 = (get_angle(N0,N1))/t1
-    del_theta2_1 = (get_angle(N1,N2))/t2
+    del_theta2_0 = (get_angle(N0, N1))/t1
+    del_theta2_1 = (get_angle(N1, N2))/t2
 
-    del_theta1 = 0.5 * ( del_theta1_1 + del_theta1_0 )
-    del_theta2 = 0.5 * ( del_theta2_1 + del_theta2_0 )
+    del_theta1 = 0.5 * (del_theta1_1 + del_theta1_0)
+    del_theta2 = 0.5 * (del_theta2_1 + del_theta2_0)
 
     doubledel_theta1 = (del_theta1_1 - del_theta1_0) / 0.5*(t1 + t2)
     doubledel_theta2 = (del_theta2_1 - del_theta2_0) / 0.5*(t1 + t2)
@@ -119,7 +121,7 @@ def get_gf(ip0,ip1,ip2,t1=1,t2=1):
     # print("doubledel_theta",doubledel_theta1,doubledel_theta2)
 
     Q_RD1 = 0
-    Q_RD1 += m1 * d1* doubledel_theta1 * doubledel_theta1
+    Q_RD1 += m1 * d1 * doubledel_theta1 * doubledel_theta1
     Q_RD1 += (m1*d1*d1 + m1*d1*d2*np.cos(theta1))*doubledel_theta2
     Q_RD1 += m1*d1*d2*np.sin(theta1)*del_theta2*del_theta2
     Q_RD1 -= m1*g*d2*np.sin(theta1+theta2)
@@ -127,11 +129,9 @@ def get_gf(ip0,ip1,ip2,t1=1,t2=1):
     Q_RD2 = 0
     Q_RD2 += (m1*d1*d1 + m1*d1*d2*np.cos(theta1))*doubledel_theta1
     Q_RD2 += ((m1+m2)*d2*d2 + m1*d1*d1 + 2*m1*d1*d2*np.cos(theta1))*doubledel_theta2
-    Q_RD2 -= 2*m1*d1*d2*np.sin(theta1)*del_theta2*del_theta1 + m1*d1*d2*np.sin(theta1)*del_theta1*del_theta1
+    Q_RD2 -= 2*m1*d1*d2*np.sin(theta1)*del_theta2*del_theta1 + m1*d1 * \
+        d2*np.sin(theta1)*del_theta1*del_theta1
     Q_RD2 -= (m1 + m2)*g*d2*np.sin(theta2) + m1*g*d1*np.sin(theta1 + theta2)
 
     # print("Energy: ", Q_RD1 + Q_RD2)
-    return Q_RD1 + Q_RD2
-
-
-    
+    return (Q_RD1 + Q_RD2).item()

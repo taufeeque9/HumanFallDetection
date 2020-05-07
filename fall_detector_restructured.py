@@ -3,11 +3,13 @@ import torch
 import argparse
 import logging
 import torch.multiprocessing as mp
+import csv
 from default_params import *
 from algorithms import *
 
 try:
     mp.set_start_method('spawn')
+    print('spawned')
 except RuntimeError:
     pass
 
@@ -70,9 +72,11 @@ class FallDetector:
             args.device = torch.device('cuda')
             args.pin_memory = True
 
+        print(args)
         return args
 
     def begin(self):
+        print('begin: ', __name__)
         queue = mp.Queue()
         print("Queue Made")
         process1 = mp.Process(target=extract_keypoints,
@@ -88,6 +92,27 @@ class FallDetector:
         process1.join()
         if not self.args.coco_points:
             process2.join()
+
+    def get_features(self):
+        queue = mp.Queue()
+        feature_q = mp.Queue()
+        print("Queue Made")
+        process1 = mp.Process(target=extract_keypoints,
+                              args=(queue, self.args, self.consecutive_frames))
+        process2 = mp.Process(target=alg2,
+                              args=(queue, self.args.plot_graph, self.consecutive_frames, feature_q))
+        print("P1 made")
+        print("P2 made")
+        process1.start()
+        process2.start()
+
+        process1.join()
+        process2.join()
+
+        gf_matrix = feature_q.get()
+        re_matrix = feature_q.get()
+
+        return re_matrix, gf_matrix
 
 
 if __name__ == "__main__":
