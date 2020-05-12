@@ -6,6 +6,7 @@ import torch.multiprocessing as mp
 import csv
 from default_params import *
 from algorithms import *
+from helpers import last_ip
 
 try:
     mp.set_start_method('spawn')
@@ -109,8 +110,14 @@ class FallDetector:
         process1.join()
         process2.join()
 
-        gf_matrix = feature_q.get()
-        re_matrix = feature_q.get()
+        re_matrix = feature_q.get()[0]
+        gf_matrix = feature_q.get()[0]
+
+        _, re_last = last_ip(re_matrix)
+        _, gf_last = last_ip(gf_matrix)
+
+        re_matrix = re_matrix[:re_last]
+        gf_matrix = gf_matrix[:gf_last]
 
         return re_matrix, gf_matrix
 

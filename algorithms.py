@@ -1,16 +1,16 @@
 import cv2
-import csv
 import logging
 import base64
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from visual import write_on_image, visualise
+from visual import write_on_image, visualise, activity_dict
 from processor import Processor
-from helpers import pop_and_add, last_ip, dist
+from helpers import pop_and_add, last_ip, dist, move_figure
 from default_params import *
-from writer import write_to_csv
 from inv_pendulum import *
+import re
+import pandas as pd
 
 
 def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_CONSEC_FRAMES):
@@ -21,9 +21,8 @@ def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_C
             continue
         cmin = [MIN_THRESH, -1]
         for i in range(len_ip_set):
-            # print(dist(last_ip(ip_set[i]), new_ip))
-            if not added[i] and dist(last_ip(ip_set[i]), new_ip) < cmin[0]:
-                cmin[0] = dist(last_ip(ip_set[i]), new_ip)
+            if not added[i] and dist(last_ip(ip_set[i])[0], new_ip) < cmin[0]:
+                cmin[0] = dist(last_ip(ip_set[i])[0], new_ip)
                 cmin[1] = i
 
         if cmin[1] == -1:
@@ -51,36 +50,19 @@ def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_C
 def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     print('main started')
 
+    tagged_df = None
     if args.video is None:
         logging.debug('Video source: webcam')
         cam = cv2.VideoCapture(0)
     else:
         logging.debug(f'Video source: {args.video}')
         cam = cv2.VideoCapture(args.video)
-
-    # Setup CSV file
-    with open(args.csv_path, mode='w') as csv_file:
-        csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"',
-                                quoting=csv.QUOTE_MINIMAL)
-        csv_writer.writerow(['frame_no',
-                             'nose.x', 'nose.y', 'nose.prob',
-                             'l.eye.x', 'l.eye.y', 'l.eye.prob',
-                             'r.eye.x', 'r.eye.y', 'r.eye.prob',
-                             'l.ear.x', 'l.ear.y', 'l.ear.prob',
-                             'r.ear.x', 'r.ear.y', 'r.ear.prob',
-                             'l.shoulder.x', 'l.shoulder.y', 'l.shoulder.prob',
-                             'r.shoulder.x', 'r.shoulder.y', 'r.shoulder.prob',
-                             'l.elbow.x', 'l.elbow.y', 'l.elbow.prob',
-                             'r.elbow.x', 'r.elbow.y', 'r.elbow.prob',
-                             'l.wrist.x', 'l.wrist.y', 'l.wrist.prob',
-                             'r.wrist.x', 'r.wrist.y', 'r.wrist.prob',
-                             'l.hip.x', 'l.hip.y', 'l.hip.prob',
-                             'r.hip.x', 'r.hip.y', 'r.hip.prob',
-                             'l.knee.x', 'l.knee.y', 'l.knee.prob',
-                             'r.knee.x', 'r.knee.y', 'r.knee.prob',
-                             'l.ankle.x', 'l.ankle.y', 'l.ankle.prob',
-                             'r.ankle.x', 'r.ankle.y', 'r.ankle.prob',
-                             ])
+        vid = [int(s) for s in re.findall(r'\d+', args.video)]
+        if len(vid) == 5:
+            tagged_df = pd.read_csv("dataset/CompleteDataSet.csv", usecols=[
+                                    "TimeStamps", "Subject", "Activity", "Trial", "Tag"], skipinitialspace=True)
+            tagged_df = tagged_df.query(
+                f'Subject == {vid[1]} & Activity == {vid[0]} & Trial == {vid[2]}')
 
     ret_val, img = cam.read()
 
@@ -101,19 +83,18 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     frame = 0
     fps = 0
     t0 = time.time()
-    # cv2.namedWindow('Detected Pose')
+    cv2.namedWindow('Detected Pose')
 
     while True:
-
         ret_val, img = cam.read()
         if img is None:
             print('no more images captured')
             queue.put(None)
             break
 
-        # if cv2.waitKey(1) == 27 or cv2.getWindowProperty('Detected Pose', cv2.WND_PROP_VISIBLE) < 1:
-        #     queue.put(None)
-        #     break
+        if cv2.waitKey(1) == 27 or cv2.getWindowProperty('Detected Pose', cv2.WND_PROP_VISIBLE) < 1:
+            queue.put(None)
+            break
 
         img = cv2.resize(img, (width, height))
         frame += 1
@@ -124,33 +105,23 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
 
         if args.coco_points:
             keypoint_sets = [keypoints.tolist() for keypoints in keypoint_sets]
-            # keypoint_sets=[{
-            #     'coordinates': keypoints.tolist(),
-            #     'detection_id': i,
-            #     'score': score,
-            #     'width_height': width_height,
-            # } for i, (keypoints, score) in enumerate(zip(keypoint_sets, scores))]
         else:
             keypoint_sets = [get_kp(keypoints.tolist()) for keypoints in keypoint_sets]
-            # keypoint_sets=[{
-            #     'coordinates': get_kp(keypoints.tolist()),
-            #     'detection_id': i,
-            #     'score': score,
-            #     'width_height': width_height,
-            # } for i, (keypoints, score) in enumerate(zip(keypoint_sets, scores))]
 
         queue.put(keypoint_sets)
 
         img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
                         vis_skeleton=args.skeleton, CocoPointsOn=args.coco_points)
 
-        # write_to_csv(frame_number=frame, humans=keypoint_sets,
-        #              width=width, height=height, csv_fp=args.csv_path)
+        if tagged_df is None:
+            img = write_on_image(
+                img=img, text=f"Avg FPS: {frame//(time.time()-t0)}", color=[0, 0, 0])
+        else:
+            img = write_on_image(img=img,
+                                 text=f"Avg FPS: {frame//(time.time()-t0)}, Tag: {activity_dict[tagged_df.iloc[frame-1]['Tag']]}",
+                                 color=[0, 0, 0])
 
-        img = write_on_image(
-            img=img, text=f"Avg FPS {frame//(time.time()-t0)}", color=[0, 0, 0])
-
-        # cv2.imshow('Detected Pose', img)
+        cv2.imshow('Detected Pose', img)
 
     queue.put(None)
 
@@ -158,14 +129,17 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
 def alg2(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q=None):
     re_matrix = []
     gf_matrix = []
-    max_length_mat = 150
+    max_length_mat = 1000
     if not plot_graph:
         max_length_mat = consecutive_frames
+    else:
+        f, ax = plt.subplots()
+        move_figure(f, 800, 100)
     ip_set = []
+
     while True:
         if not queue.empty():
             new_frame = queue.get()
-            # print(re_matrix)
             if new_frame is None:
                 break
 
@@ -206,20 +180,16 @@ def alg2(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q=
 
                 else:
 
-                    pop_and_add(gf_matrix[i], 0, max_length_mat)
+                    pop_and_add(gf_matrix[i], 0, max_length_mat - 1)
 
-        if feature_q is None and len(gf_matrix) > 0:
+        if feature_q is None and len(re_matrix) > 0:
             plt.clf()
-            x = np.linspace(1, len(gf_matrix[0]), len(gf_matrix[0]))
+            x = np.linspace(1, len(re_matrix[0]), len(re_matrix[0]))
             axes = plt.gca()
-            line, = axes.plot(x, gf_matrix[0], 'r-')
+            line, = axes.plot(x, re_matrix[0], 'r-')
             plt.draw()
             plt.pause(1e-17)
 
-    # print(re_matrix)
     if feature_q is not None:
         feature_q.put(re_matrix)
         feature_q.put(gf_matrix)
-
-
-# commented 3 parts

@@ -39,6 +39,20 @@ SKELETON_CONNECTIONS_COCO = [(0, 1, (210, 182, 247)), (0, 2, (127, 127, 127)), (
 SKELETON_CONNECTIONS_5P = [('H', 'N', (210, 182, 247)), ('N', 'B', (210, 182, 247)), ('B', 'KL', (210, 182, 247)),
                            ('B', 'KR', (210, 182, 247)), ('KL', 'KR', (210, 182, 247))]
 
+activity_dict = {
+    1: "Falling forward using hands",
+    2: "Falling forward using knees",
+    3: "Falling backwards",
+    4: "Falling sideward",
+    5: "Falling sitting in empty chair",
+    6: "Walking",
+    7: "Standing",
+    8: "Sitting",
+    9: "Picking up an object",
+    10: "Jumping",
+    11: "Laying",
+}
+
 
 def write_on_image(img: np.ndarray, text: str, color: List) -> np.ndarray:
     """Write text at the top of the image."""
