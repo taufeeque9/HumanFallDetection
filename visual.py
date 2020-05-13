@@ -89,6 +89,7 @@ def visualise(img: np.ndarray, keypoint_sets: List, width: int, height: int, vis
 
     if vis_keypoints or vis_skeleton:
         for keypoints in keypoint_sets:
+            keypoints = keypoints[0]
 
             if vis_skeleton:
                 for p1i, p2i, color in SKELETON_CONNECTIONS:

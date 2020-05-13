@@ -15,6 +15,8 @@ def last_ip(ips):
 
 
 def dist(ip1, ip2):
+    ip1 = ip1[0]
+    ip2 = ip2[0]
     return np.sqrt(np.sum((ip1['N']-ip2['N'])**2 + (ip1['B']-ip2['B'])**2))
 
 

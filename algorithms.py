@@ -78,7 +78,7 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     logging.debug(f'Target width and height = {width_height}')
     processor_singleton = Processor(width_height, args)
 
-    # output_video = None
+    output_video = None
 
     frame = 0
     fps = 0
@@ -87,6 +87,13 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
 
     while True:
         ret_val, img = cam.read()
+        frame += 1
+        if tagged_df is None:
+            curr_time = time.time()
+        else:
+            curr_time = tagged_df.iloc[frame-1]['TimeStamps'][11:]
+            curr_time = sum(x * float(t) for x, t in zip([3600, 60, 1], curr_time.split(":")))
+
         if img is None:
             print('no more images captured')
             queue.put(None)
@@ -97,7 +104,6 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
             break
 
         img = cv2.resize(img, (width, height))
-        frame += 1
 
         keypoint_sets, scores, width_height = processor_singleton.single_image(
             b64image=base64.b64encode(cv2.imencode('.jpg', img)[1]).decode('UTF-8')
@@ -106,10 +112,9 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
         if args.coco_points:
             keypoint_sets = [keypoints.tolist() for keypoints in keypoint_sets]
         else:
-            keypoint_sets = [get_kp(keypoints.tolist()) for keypoints in keypoint_sets]
+            keypoint_sets = [(get_kp(keypoints.tolist()), curr_time) for keypoints in keypoint_sets]
 
         queue.put(keypoint_sets)
-
         img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
                         vis_skeleton=args.skeleton, CocoPointsOn=args.coco_points)
 
@@ -121,6 +126,17 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
                                  text=f"Avg FPS: {frame//(time.time()-t0)}, Tag: {activity_dict[tagged_df.iloc[frame-1]['Tag']]}",
                                  color=[0, 0, 0])
 
+        if output_video is None:
+            if args.save_output:
+                output_video = cv2.VideoWriter(filename=args.out_path, fourcc=cv2.VideoWriter_fourcc(*'MP42'),
+                                               fps=args.fps, frameSize=img.shape[:2][::-1])
+                logging.debug(
+                    f'Saving the output video at {args.out_path} with {args.fps} frames per seconds')
+            else:
+                output_video = None
+                logging.debug(f'Not saving the output video')
+        else:
+            output_video.write(img)
         cv2.imshow('Detected Pose', img)
 
     queue.put(None)
@@ -151,10 +167,10 @@ def alg2(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q=
                                     ip_set[i][-2], ip_set[i][-1]), max_length_mat - 1)
                     elif ip_set[i][-3] is not None:
                         pop_and_add(re_matrix[i], get_rot_energy(
-                                    ip_set[i][-3], ip_set[i][-1], 2), max_length_mat - 1)
+                                    ip_set[i][-3], ip_set[i][-1]), max_length_mat - 1)
                     elif ip_set[i][-4] is not None:
                         pop_and_add(re_matrix[i], get_rot_energy(
-                                    ip_set[i][-4], ip_set[i][-1], 3), max_length_mat - 1)
+                                    ip_set[i][-4], ip_set[i][-1]), max_length_mat - 1)
                     else:
                         pop_and_add(re_matrix[i], 0, max_length_mat - 1)
                 else:
@@ -175,13 +191,17 @@ def alg2(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q=
                         pop_and_add(gf_matrix[i], 0, max_length_mat)
                         continue
 
-                    pop_and_add(gf_matrix[i], get_gf(ip_set[i][last2], ip_set[i][last1], ip_set[i][-1],
-                                                     last1 - last2, -1 - last1), max_length_mat - 1)
+                    pop_and_add(gf_matrix[i], get_gf(ip_set[i][last2], ip_set[i][last1],
+                                                     ip_set[i][-1]), max_length_mat - 1)
 
                 else:
 
                     pop_and_add(gf_matrix[i], 0, max_length_mat - 1)
-
+        #
+        # if len(re_matrix) > 0 and re_matrix[0][-1] > 10:
+        #     print(re_matrix[0].index(re_matrix[0][-1]))
+        #     print(ip_set[0][-1])
+        #     print(ip_set[0][-2])
         if feature_q is None and len(re_matrix) > 0:
             plt.clf()
             x = np.linspace(1, len(re_matrix[0]), len(re_matrix[0]))

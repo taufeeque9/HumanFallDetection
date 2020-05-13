@@ -13,10 +13,11 @@ def get_kp(kp):
             kp[CocoPart.REye][2]*kp[CocoPart.REye][1] + kp[CocoPart.REar][2]*kp[CocoPart.REar][1])
     den = kp[CocoPart.LEar][2] + kp[CocoPart.LEye][2] + kp[CocoPart.REye][2] + kp[CocoPart.REar][2]
 
-    if den > 4*threshold1:
-        inv_pend['H'] = np.array([numx/den, numy/den])
-    else:
+    if den - kp[CocoPart.LEar][2] < 30*threshold1 or den - kp[CocoPart.LEye][2] < 30*threshold1 or \
+       den - kp[CocoPart.REar][2] < 30*threshold1 or den - kp[CocoPart.REye][2] < 30*threshold1:
         inv_pend['H'] = None
+    else:
+        inv_pend['H'] = np.array([numx/den, numy/den])
 
     if all([kp[CocoPart.LShoulder] is not None, kp[CocoPart.RShoulder] is not None,
             kp[CocoPart.LShoulder][2] > threshold1, kp[CocoPart.RShoulder][2] > threshold1]):
@@ -50,23 +51,31 @@ def get_angle(v0, v1):
 
 
 def is_valid(ip):
+    ip = ip[0]
     return (ip['B'] is not None and ip['N'] is not None and ip['H'] is not None)
 
 
-def get_rot_energy(ip0, ip1, t=1):
+def get_rot_energy(ip0, ip1):
+    t = ip1[1] - ip0[1]
+    ip0 = ip0[0]
+    ip1 = ip1[0]
+    m1 = 1
+    m2 = 5
     energy = 0
     H1 = ip1['H'] - ip1['B']
     H0 = ip0['H'] - ip0['B']
-    rsq = H1.dot(H1)
+    d1sq = H1.dot(H1)
     wsq = (get_angle(H0, H1)/t)**2
-    energy += rsq*wsq
+    energy += m1*d1sq*wsq
+
     N1 = ip1['N'] - ip1['B']
     N0 = ip0['N'] - ip0['B']
-    rsq = N1.dot(N1)
+    d2sq = N1.dot(N1)
     wsq = (get_angle(N0, N1)/t)**2
-    energy += rsq*wsq
+    energy += m2*d2sq*wsq
+    energy = energy/(2*(d1sq + d2sq))
 
-    return (energy/2).item()
+    return energy
 
 
 def get_angle_vertical(v):
@@ -74,9 +83,14 @@ def get_angle_vertical(v):
 
 
 def get_gf(ip0, ip1, ip2, t1=1, t2=1):
+    t1 = ip1[1] - ip0[1]
+    t2 = ip2[1] - ip1[1]
+    ip0 = ip0[0]
+    ip1 = ip1[0]
+    ip2 = ip2[0]
 
     m1 = 1
-    m2 = 1
+    m2 = 5
     g = 10
     H2 = ip2['H'] - ip2['N']
     H1 = ip1['H'] - ip1['N']
@@ -117,6 +131,8 @@ def get_gf(ip0, ip1, ip2, t1=1, t2=1):
     doubledel_theta1 = (del_theta1_1 - del_theta1_0) / 0.5*(t1 + t2)
     doubledel_theta2 = (del_theta2_1 - del_theta2_0) / 0.5*(t1 + t2)
 
+    d1 = d1/np.sqrt(d1**2 + d2**2)
+    d2 = d2/np.sqrt(d1**2 + d2**2)
     # print("del_theta",del_theta1,del_theta2)
     # print("doubledel_theta",doubledel_theta1,doubledel_theta2)
 

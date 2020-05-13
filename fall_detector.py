@@ -53,7 +53,7 @@ class FallDetector:
                               help='Visualises the COCO points of the human pose.')
         vis_args.add_argument('--save-output', default=False, action='store_true',
                               help='Save the result in a video file.')
-        vis_args.add_argument('--fps', default=20, type=int,
+        vis_args.add_argument('--fps', default=18, type=int,
                               help='FPS for the output video.')
         vis_args.add_argument('--out-path', default='result.avi', type=str,
                               help='Save the output video at the path specified. .avi file format.')
