@@ -69,11 +69,11 @@ if __name__ == "__main__":
         [axis.legend() for axis in ax.ravel()]
         [axis.set_xlim(maxx, 0) for raxis in ax for axis in raxis[:2]]
         fig.tight_layout()
-        from pathlib import Path
-        plot_file = Path(f"dataset/Activity{i}/Subject{get_id(start)[0]}/feature_plot.png")
-        if plot_file.is_file():
-            os.remove(f"dataset/Activity{i}/Subject{get_id(start)[0]}/feature_plot.png")
-        fig.savefig(f"dataset/Activity{i}/Subject{get_id(start)[0]}/feature_plot.png")
+        # from pathlib import Path
+        # plot_file = Path(f"dataset/Activity{i}/Subject{get_id(start)[0]}/feature_plot.png")
+        # if plot_file.is_file():
+        #     os.remove(f"dataset/Activity{i}/Subject{get_id(start)[0]}/feature_plot.png")
+        # fig.savefig(f"dataset/Activity{i}/Subject{get_id(start)[0]}/feature_plot.png")
         plt.show()
 
     def generate_data():
