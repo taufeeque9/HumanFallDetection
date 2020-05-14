@@ -94,6 +94,11 @@ class FallDetector:
         if not self.args.coco_points:
             process2.join()
 
+        # while not queue.empty():
+        #     queue.get()
+        # queue.close()
+        # queue.join_thread()
+
     def get_features(self):
         queue = mp.Queue()
         feature_q = mp.Queue()

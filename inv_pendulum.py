@@ -3,7 +3,7 @@ import numpy as np
 
 
 def get_kp(kp):
-    threshold1 = 1e-4
+    threshold1 = 5e-3
     # dict of np arrays of coordinates
     inv_pend = {}
     # print(type(kp[CocoPart.LEar]))
@@ -61,20 +61,31 @@ def get_rot_energy(ip0, ip1):
     ip1 = ip1[0]
     m1 = 1
     m2 = 5
+    m3 = 5
     energy = 0
-    H1 = ip1['H'] - ip1['B']
-    H0 = ip0['H'] - ip0['B']
-    d1sq = H1.dot(H1)
-    wsq = (get_angle(H0, H1)/t)**2
-    energy += m1*d1sq*wsq
 
     N1 = ip1['N'] - ip1['B']
     N0 = ip0['N'] - ip0['B']
     d2sq = N1.dot(N1)
-    wsq = (get_angle(N0, N1)/t)**2
-    energy += m2*d2sq*wsq
-    energy = energy/(2*(d1sq + d2sq))
+    w2sq = (get_angle(N0, N1)/t)**2
+    energy += m2*d2sq*w2sq
 
+    H1 = ip1['H'] - ip1['B']
+    H0 = ip0['H'] - ip0['B']
+    d1sq = H1.dot(H1)
+    w1sq = (get_angle(H0, H1)/t)**2
+    energy += m1*d1sq*w1sq
+
+    if ip0['KL'] is not None and ip0['KR']is not None:
+        if ip1['KL'] is not None and ip1['KR']is not None:
+            K1 = (ip1['KL'] + ip1['KR'])/2 - ip1['B']
+            K0 = (ip0['KL'] + ip0['KR'])/2 - ip0['B']
+            d3sq = K1.dot(K1)
+            w3sq = (get_angle(K0, K1)/t)**2
+            energy += m3*d3sq*w3sq
+
+    energy = energy/(2*d2sq)
+    # energy = energy/2
     return energy
 
 
@@ -131,8 +142,8 @@ def get_gf(ip0, ip1, ip2, t1=1, t2=1):
     doubledel_theta1 = (del_theta1_1 - del_theta1_0) / 0.5*(t1 + t2)
     doubledel_theta2 = (del_theta2_1 - del_theta2_0) / 0.5*(t1 + t2)
 
-    d1 = d1/np.sqrt(d1**2 + d2**2)
-    d2 = d2/np.sqrt(d1**2 + d2**2)
+    d1 = d1/d2
+    d2 = 1
     # print("del_theta",del_theta1,del_theta2)
     # print("doubledel_theta",doubledel_theta1,doubledel_theta2)
 
@@ -150,4 +161,4 @@ def get_gf(ip0, ip1, ip2, t1=1, t2=1):
     Q_RD2 -= (m1 + m2)*g*d2*np.sin(theta2) + m1*g*d1*np.sin(theta1 + theta2)
 
     # print("Energy: ", Q_RD1 + Q_RD2)
-    return (Q_RD1 + Q_RD2).item()
+    return Q_RD1 + Q_RD2

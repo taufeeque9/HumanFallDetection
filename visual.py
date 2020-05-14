@@ -40,8 +40,8 @@ SKELETON_CONNECTIONS_5P = [('H', 'N', (210, 182, 247)), ('N', 'B', (210, 182, 24
                            ('B', 'KR', (210, 182, 247)), ('KL', 'KR', (210, 182, 247))]
 
 activity_dict = {
-    1: "Falling forward using hands",
-    2: "Falling forward using knees",
+    1.0: "Falling forward using hands",
+    2.0: "Falling forward using knees",
     3: "Falling backwards",
     4: "Falling sideward",
     5: "Falling sitting in empty chair",
@@ -51,6 +51,7 @@ activity_dict = {
     9: "Picking up an object",
     10: "Jumping",
     11: "Laying",
+    20: "None"
 }
 
 

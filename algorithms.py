@@ -209,6 +209,13 @@ def alg2(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q=
             line, = axes.plot(x, re_matrix[0], 'r-')
             plt.draw()
             plt.pause(1e-17)
+        # if feature_q is None and len(gf_matrix) > 0:
+        #     plt.clf()
+        #     x = np.linspace(1, len(gf_matrix[0]), len(gf_matrix[0]))
+        #     axes = plt.gca()
+        #     line, = axes.plot(x, gf_matrix[0], 'r-')
+        #     plt.draw()
+        #     plt.pause(1e-17)
 
     if feature_q is not None:
         feature_q.put(re_matrix)
