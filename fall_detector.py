@@ -1,12 +1,15 @@
 import openpifpaf
 import torch
 import argparse
+import copy
 import logging
 import torch.multiprocessing as mp
 import csv
 from default_params import *
-from algorithms import *
+from algorithms_parallel import *
+from algorithms_sequential import *
 from helpers import last_ip
+import os
 
 try:
     mp.set_start_method('spawn')
@@ -29,6 +32,8 @@ class FallDetector:
         openpifpaf.decoder.cli(parser, force_complete_pose=True,
                                instance_threshold=0.2, seed_threshold=0.5)
         openpifpaf.network.nets.cli(parser)
+        parser.add_argument('--sequential',default=False,action='store_true',
+                            help='Runs both cameras algorithms sequentially')
         parser.add_argument('--resolution', default=0.4, type=float,
                             help=('Resolution prescale factor from 640x480. '
                                   'Will be rounded to multiples of 16.'))
@@ -37,6 +42,8 @@ class FallDetector:
                                   'Example WIDTHxHEIGHT.'))
         parser.add_argument('--video', default=None, type=str,
                             help='Path to the video file.')
+        parser.add_argument('--video_directory',default='dataset/Activity1/Subject1/',
+                            type=str,help='Diretory of video files')
         parser.add_argument('--debug', default=False, action='store_true',
                             help='debug messages and autoreload')
         parser.add_argument('--disable_cuda', default=False, action='store_true',
@@ -67,48 +74,115 @@ class FallDetector:
 
         # Add args.device
         args.device = torch.device('cpu')
-        print(args.disable_cuda)
         args.pin_memory = False
         if not args.disable_cuda and torch.cuda.is_available():
             args.device = torch.device('cuda')
             args.pin_memory = True
 
-        print(args)
+        if args.checkpoint is None:
+            args.checkpoint = 'resnet18'
+
         return args
 
-    def begin(self):
+    def begin_parallel(self):
         print('begin: ', __name__)
-        queue = mp.Queue()
-        print("Queue Made")
-        process1 = mp.Process(target=extract_keypoints,
-                              args=(queue, self.args, self.consecutive_frames))
+        queue1 = mp.Queue()
+        queue2 = mp.Queue()
+        feature_q_1 = mp.Queue()
+        feature_q_2 = mp.Queue()
+        counter1 = mp.Value('i',0)
+        counter2 = mp.Value('i',0)
+        args1=copy.deepcopy(self.args)
+        args2=copy.deepcopy(self.args)
+        args1.video = os.path.join(self.args.video_directory,"Trial1Cam1.mp4")
+        args2.video = os.path.join(self.args.video_directory,"Trial1Cam2.mp4")
+        process1_1 = mp.Process(target=extract_keypoints_parallel,
+                              args=(queue1, args1,counter1 , counter2, self.consecutive_frames))
+        process1_2 = mp.Process(target=extract_keypoints_parallel,
+                              args=(queue2, args2,counter2, counter1 ,self.consecutive_frames))
+        process1_1.start()
+        process1_2.start()
+        if self.args.coco_points:
+            process1_1.join()
+            process1_2.join()
+            return
+        
+
+        process2_1 = mp.Process(target=alg2_parallel,
+                               args=(queue1, self.args.plot_graph, self.consecutive_frames,feature_q_1))
+        process2_2 = mp.Process(target=alg2_parallel,
+                                  args=(queue2, self.args.plot_graph, self.consecutive_frames,feature_q_2))
+        process2_1.start()
+        process2_2.start()
+
+        process1_1.join()
+        process1_2.join()
+        process2_1.join()
+        process2_2.join()
+
+        return
+
+    def begin_sequential(self):
+        queue1 = mp.Queue()
+        queue2 = mp.Queue()
+        feature_q_1 = mp.Queue()
+        feature_q_2 = mp.Queue()
+        args1=copy.deepcopy(self.args)
+        args2=copy.deepcopy(self.args)
+        args1.video = os.path.join(self.args.video_directory,"Trial1Cam1.mp4")
+        args2.video = os.path.join(self.args.video_directory,"Trial1Cam2.mp4")
+        process1 = mp.Process(target= extract_keypoints_sequential,
+                              args=(queue1,queue2,args1,args2,self.consecutive_frames))
         process1.start()
-        print("P1 made")
-        if not self.args.coco_points:
-            process2 = mp.Process(target=alg2,
-                                  args=(queue, self.args.plot_graph, self.consecutive_frames))
-            print("P2 made")
-            process2.start()
-
+        if self.args.coco_points:
+            process1.join()
+            return
+        
+        process2 = mp.Process(target=alg2_sequential,
+                              args=(queue1,queue2,self.args.plot_graph,self.consecutive_frames))
+        process2.start()
         process1.join()
-        if not self.args.coco_points:
-            process2.join()
+        process2.join()
+        return
 
-        # while not queue.empty():
-        #     queue.get()
-        # queue.close()
-        # queue.join_thread()
+    def begin_mixed(self):
+        queue1 = mp.Queue()
+        queue2 = mp.Queue()
+        feature_q_1 = mp.Queue()
+        feature_q_2 = mp.Queue()
+        counter1 = mp.Value('i',0)
+        counter2 = mp.Value('i',0)
+        args1=copy.deepcopy(self.args)
+        args2=copy.deepcopy(self.args)
+        args1.video = os.path.join(self.args.video_directory,"Trial1Cam1.mp4")
+        args2.video = os.path.join(self.args.video_directory,"Trial1Cam2.mp4")
+        process1_1 = mp.Process(target=extract_keypoints_parallel,
+                              args=(queue1, args1,counter1 , counter2, self.consecutive_frames))
+        process1_2 = mp.Process(target=extract_keypoints_parallel,
+                              args=(queue2, args2,counter2, counter1 ,self.consecutive_frames))
+        process1_1.start()
+        process1_2.start()
+        if self.args.coco_points:
+            process1_1.join()
+            process1_2.join()
+        process2 = mp.Process(target=alg2_sequential,
+                              args=(queue1,queue2,self.args.plot_graph,self.consecutive_frames))
+        process2.start()
+        process1_1.join()
+        process1_2.join()
+        process2.join()
+        return
+
+        
+
 
     def get_features(self):
         queue = mp.Queue()
         feature_q = mp.Queue()
-        print("Queue Made")
-        process1 = mp.Process(target=extract_keypoints,
+        process1 = mp.Process(target=extract_keypoints_parallel,
                               args=(queue, self.args, self.consecutive_frames))
-        process2 = mp.Process(target=alg2,
+        process2 = mp.Process(target=alg2_parallel,
                               args=(queue, self.args.plot_graph, self.consecutive_frames, feature_q))
-        print("P1 made")
-        print("P2 made")
         process1.start()
         process2.start()
 
@@ -129,4 +203,8 @@ class FallDetector:
 
 if __name__ == "__main__":
     f = FallDetector()
-    f.begin()
+    if f.args.sequential:
+        f.begin_sequential()
+    else:
+        f.begin_mixed()
+    

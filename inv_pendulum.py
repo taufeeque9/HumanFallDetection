@@ -1,6 +1,41 @@
 from visual import CocoPart
 import numpy as np
+from helpers import *
+from default_params import *
 
+def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_CONSEC_FRAMES):
+    len_ip_set = len(ip_set)
+    added = [False for _ in range(len_ip_set)]
+    for new_ip in new_ips:
+        if not is_valid(new_ip):
+            continue
+        cmin = [MIN_THRESH, -1]
+        for i in range(len_ip_set):
+            if not added[i] and dist(last_ip(ip_set[i])[0], new_ip) < cmin[0]:
+                # here add dome condition that last_ip(ip_set[0] >-5 or someting)
+                cmin[0] = dist(last_ip(ip_set[i])[0], new_ip)
+                cmin[1] = i
+
+        if cmin[1] == -1:
+            ip_set.append([None for _ in range(consecutive_frames - 1)] + [new_ip])
+            re_matrix.append([0 for _ in range(consecutive_frames )])
+            gf_matrix.append([0 for _ in range(consecutive_frames )])
+
+        else:
+            added[cmin[1]] = True
+            pop_and_add(ip_set[cmin[1]], new_ip, consecutive_frames)
+
+    i = 0
+    while i < len(added):
+        if not added[i]:
+            pop_and_add(ip_set[i], None, consecutive_frames)
+            if ip_set[i] == [None for _ in range(consecutive_frames)]:
+                ip_set.pop(i)
+                re_matrix.pop(i)
+                gf_matrix.pop(i)
+                added.pop(i)
+                continue
+        i += 1
 
 def get_kp(kp):
     threshold1 = 5e-3

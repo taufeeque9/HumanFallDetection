@@ -13,41 +13,7 @@ import re
 import pandas as pd
 
 
-def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_CONSEC_FRAMES):
-    len_ip_set = len(ip_set)
-    added = [False for _ in range(len_ip_set)]
-    for new_ip in new_ips:
-        if not is_valid(new_ip):
-            continue
-        cmin = [MIN_THRESH, -1]
-        for i in range(len_ip_set):
-            if not added[i] and dist(last_ip(ip_set[i])[0], new_ip) < cmin[0]:
-                cmin[0] = dist(last_ip(ip_set[i])[0], new_ip)
-                cmin[1] = i
-
-        if cmin[1] == -1:
-            ip_set.append([None for _ in range(consecutive_frames - 1)] + [new_ip])
-            re_matrix.append([])
-            gf_matrix.append([])
-
-        else:
-            added[cmin[1]] = True
-            pop_and_add(ip_set[cmin[1]], new_ip, consecutive_frames)
-
-    i = 0
-    while i < len(added):
-        if not added[i]:
-            pop_and_add(ip_set[i], None, consecutive_frames)
-            if ip_set[i] == [None for _ in range(consecutive_frames)]:
-                ip_set.pop(i)
-                re_matrix.pop(i)
-                gf_matrix.pop(i)
-                added.pop(i)
-                continue
-        i += 1
-
-
-def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
+def extract_keypoints_parallel(queue, args, self_counter , other_counter, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     print('main started')
 
     tagged_df = None
@@ -83,11 +49,16 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     frame = 0
     fps = 0
     t0 = time.time()
-    cv2.namedWindow('Detected Pose')
+    cv2.namedWindow(args.video)
+    max_time = 30
+    while time.time() - t0 < max_time:
+        # print(args.video,self_counter.value,other_counter.value,sep=" ")
+        if(self_counter.value > other_counter.value):
+            continue
 
-    while True:
         ret_val, img = cam.read()
         frame += 1
+        self_counter.value += 1
         if tagged_df is None:
             curr_time = time.time()
         else:
@@ -97,9 +68,10 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
         if img is None:
             print('no more images captured')
             queue.put(None)
+            print(args.video, curr_time,sep=" ")
             break
 
-        if cv2.waitKey(1) == 27 or cv2.getWindowProperty('Detected Pose', cv2.WND_PROP_VISIBLE) < 1:
+        if cv2.waitKey(1) == 27 or cv2.getWindowProperty(args.video, cv2.WND_PROP_VISIBLE) < 1:
             queue.put(None)
             break
 
@@ -120,10 +92,10 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
 
         if tagged_df is None:
             img = write_on_image(
-                img=img, text=f"Avg FPS: {frame//(time.time()-t0)}", color=[0, 0, 0])
+                img=img, text=f"Avg FPS: {frame//(time.time()-t0)}, Frame: {frame}", color=[0, 0, 0])
         else:
             img = write_on_image(img=img,
-                                 text=f"Avg FPS: {frame//(time.time()-t0)}, Tag: {activity_dict[tagged_df.iloc[frame-1]['Tag']]}",
+                                 text=f"Avg FPS: {frame//(time.time()-t0)}, Frame: {frame}, Tag: {activity_dict[tagged_df.iloc[frame-1]['Tag']]}",
                                  color=[0, 0, 0])
 
         if output_video is None:
@@ -137,15 +109,17 @@ def extract_keypoints(queue, args, consecutive_frames=DEFAULT_CONSEC_FRAMES):
                 logging.debug(f'Not saving the output video')
         else:
             output_video.write(img)
-        cv2.imshow('Detected Pose', img)
-
+        cv2.imshow(args.video, img)
+    print(f"Frames in {max_time}secs: {frame}")
+    cv2.destroyWindow(args.video)
     queue.put(None)
+    return 
 
 
-def alg2(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q=None):
+def alg2_parallel(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q=None):
     re_matrix = []
     gf_matrix = []
-    max_length_mat = 1000
+    max_length_mat = 200
     if not plot_graph:
         max_length_mat = consecutive_frames
     else:
@@ -160,21 +134,25 @@ def alg2(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q=
                 break
 
             match_ip(ip_set, new_frame, re_matrix, gf_matrix, max_length_mat)
+            len_ip = [len(k) for k in ip_set]
+            len_re = [len(k) for k in re_matrix]
+            # print("IP: ",len_ip)
+            # print("RE: ",len_re)
             for i in range(len(ip_set)):
                 if ip_set[i][-1] is not None:
                     if ip_set[i][-2] is not None:
                         pop_and_add(re_matrix[i], get_rot_energy(
-                                    ip_set[i][-2], ip_set[i][-1]), max_length_mat - 1)
+                                    ip_set[i][-2], ip_set[i][-1]), max_length_mat )
                     elif ip_set[i][-3] is not None:
                         pop_and_add(re_matrix[i], get_rot_energy(
-                                    ip_set[i][-3], ip_set[i][-1]), max_length_mat - 1)
+                                    ip_set[i][-3], ip_set[i][-1]), max_length_mat )
                     elif ip_set[i][-4] is not None:
                         pop_and_add(re_matrix[i], get_rot_energy(
-                                    ip_set[i][-4], ip_set[i][-1]), max_length_mat - 1)
+                                    ip_set[i][-4], ip_set[i][-1]), max_length_mat )
                     else:
-                        pop_and_add(re_matrix[i], 0, max_length_mat - 1)
+                        pop_and_add(re_matrix[i], 0, max_length_mat )
                 else:
-                    pop_and_add(re_matrix[i], 0, max_length_mat - 1)
+                    pop_and_add(re_matrix[i], 0, max_length_mat )
 
             for i in range(len(ip_set)):
                 if ip_set[i][-1] is not None:
@@ -192,16 +170,13 @@ def alg2(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q=
                         continue
 
                     pop_and_add(gf_matrix[i], get_gf(ip_set[i][last2], ip_set[i][last1],
-                                                     ip_set[i][-1]), max_length_mat - 1)
+                                                     ip_set[i][-1]), max_length_mat)
 
                 else:
 
-                    pop_and_add(gf_matrix[i], 0, max_length_mat - 1)
-        #
-        # if len(re_matrix) > 0 and re_matrix[0][-1] > 10:
-        #     print(re_matrix[0].index(re_matrix[0][-1]))
-        #     print(ip_set[0][-1])
-        #     print(ip_set[0][-2])
+                    pop_and_add(gf_matrix[i], 0, max_length_mat )
+        if not plot_graph:
+            continue
         if feature_q is None and len(re_matrix) > 0:
             plt.clf()
             x = np.linspace(1, len(re_matrix[0]), len(re_matrix[0]))
@@ -209,14 +184,9 @@ def alg2(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q=
             line, = axes.plot(x, re_matrix[0], 'r-')
             plt.draw()
             plt.pause(1e-17)
-        # if feature_q is None and len(gf_matrix) > 0:
-        #     plt.clf()
-        #     x = np.linspace(1, len(gf_matrix[0]), len(gf_matrix[0]))
-        #     axes = plt.gca()
-        #     line, = axes.plot(x, gf_matrix[0], 'r-')
-        #     plt.draw()
-        #     plt.pause(1e-17)
 
+    # print(ip_set)
+    # print(re_matrix)
     if feature_q is not None:
         feature_q.put(re_matrix)
         feature_q.put(gf_matrix)

@@ -93,7 +93,7 @@ if __name__ == "__main__":
                                 args = ['--plot_graph', '--checkpoint=resnet18',
                                         f'--video=dataset/Activity{act_id}/Subject{sub_id}/Trial{trial_id}Cam{cam_id}.mp4']
                                 sys.argv = [orig_sys_argv[0]] + args
-                                f = fall_detector_restructured.FallDetector()
+                                f = fall_detector.FallDetector()
                                 re_matrix, gf_matrix = f.get_features()
                                 # print(re_matrix)
                                 re_writer.writerow(re_matrix)
