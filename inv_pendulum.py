@@ -3,6 +3,7 @@ import numpy as np
 from helpers import *
 from default_params import *
 
+
 def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     len_ip_set = len(ip_set)
     added = [False for _ in range(len_ip_set)]
@@ -18,8 +19,8 @@ def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_C
 
         if cmin[1] == -1:
             ip_set.append([None for _ in range(consecutive_frames - 1)] + [new_ip])
-            re_matrix.append([0 for _ in range(consecutive_frames )])
-            gf_matrix.append([0 for _ in range(consecutive_frames )])
+            re_matrix.append([])
+            gf_matrix.append([])
 
         else:
             added[cmin[1]] = True
@@ -36,6 +37,7 @@ def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_C
                 added.pop(i)
                 continue
         i += 1
+
 
 def get_kp(kp):
     threshold1 = 5e-3

@@ -5,6 +5,7 @@ import time
 import openpifpaf
 import PIL
 import torch
+import numpy as np
 
 
 class Processor(object):
@@ -17,9 +18,39 @@ class Processor(object):
         self.processor = openpifpaf.decoder.factory_from_args(args, self.model, args.device)
         self.device = args.device
 
-    def single_image(self, b64image):
-        image_bytes = io.BytesIO(base64.b64decode(b64image))
-        im = PIL.Image.open(image_bytes).convert('RGB')
+    def get_bb(self, kp_set, score=None):
+        bb_list = []
+        for i in range(kp_set.shape[0]):
+            x = kp_set[i, :, 0]
+            y = kp_set[i, :, 1]
+            v = kp_set[i, :, 2]
+            if not np.any(v > 0):
+                return
+
+            # keypoint bounding box
+            x1, x2 = np.min(x[v > 0]), np.max(x[v > 0])
+            y1, y2 = np.min(y[v > 0]), np.max(y[v > 0])
+            if x2 - x1 < 5.0/self.width_height[0]:
+                x1 -= 2.0/self.width_height[0]
+                x2 += 2.0/self.width_height[0]
+            if y2 - y1 < 5.0/self.width_height[1]:
+                y1 -= 2.0/self.width_height[1]
+                y2 += 2.0/self.width_height[1]
+
+            bb_list.append((x1, y1, x2, y2))
+
+        # ax.add_patch(
+        #     matplotlib.patches.Rectangle(
+        #         (x1, y1), x2s - x1, y2 - y1, fill=False, color=color))
+        #
+        # if score:
+        #     ax.text(x1, y1, '{:.4f}'.format(score), fontsize=8, color=color)
+        return bb_list
+
+    def single_image(self, image):
+        # image_bytes = io.BytesIO(base64.b64decode(b64image))
+        # im = PIL.Image.open(image_bytes).convert('RGB')
+        im = PIL.Image.fromarray(image)
 
         target_wh = self.width_height
         if (im.size[0] > im.size[1]) != (target_wh[0] > target_wh[1]):
@@ -42,4 +73,5 @@ class Processor(object):
         keypoint_sets[:, :, 0] /= processed_image_cpu.shape[2]
         keypoint_sets[:, :, 1] /= processed_image_cpu.shape[1]
 
-        return keypoint_sets, scores, width_height
+        bboxes = self.get_bb(keypoint_sets)
+        return keypoint_sets, bboxes, width_height
