@@ -92,12 +92,16 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
         else:
             anns = [get_kp(keypoints.tolist()) for keypoints in keypoint_sets]
             keypoint_sets = [(ann[0], curr_time) for ann in anns]
-            bboxes = [(np.asarray([width, height])*np.asarray(ann[1])).astype('int32')
-                      for ann in anns]
+            ubboxes = [(np.asarray([width, height])*np.asarray(ann[1])).astype('int32')
+                       for ann in anns]
+            lbboxes = [(np.asarray([width, height])*np.asarray(ann[2])).astype('int32')
+                       for ann in anns]
 
-            [cv2.polylines(img, bboxes, False, (0, 0, 0), 2) for bbox in bboxes]
+            cv2.polylines(img, ubboxes, True, (255, 0, 0), 2)
+            cv2.polylines(img, lbboxes, True, (0, 255, 0), 2)
         # print(bboxes[0])
-        hist_list = [get_hist(img, bbox) for bbox in bboxes]
+        uhist_list = [get_hist(img, bbox) for bbox in ubboxes]
+        lhist_list = [get_hist(img, bbox) for bbox in lbboxes]
         # plt.clf()
         # plt.plot(hist_list[0][:, 5, 5])
         # plt.draw()
