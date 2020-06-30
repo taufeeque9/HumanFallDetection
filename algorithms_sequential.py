@@ -152,10 +152,8 @@ def alg2_sequential(queue1, queue2, plot_graph, consecutive_frames=DEFAULT_CONSE
         move_figure(f, 800, 100)
 
     ip_set1, ip_set2 = [], []
-    f = 0
     while True:
         if not queue1.empty() and not queue2.empty():
-            f += 1
             new_frame1 = queue1.get()
             new_frame2 = queue2.get()
             if new_frame1 is None or new_frame2 is None:
@@ -163,9 +161,8 @@ def alg2_sequential(queue1, queue2, plot_graph, consecutive_frames=DEFAULT_CONSE
             get_frame_features(ip_set1, new_frame1, re_matrix1, gf_matrix1, max_length_mat)
             get_frame_features(ip_set2, new_frame2, re_matrix2, gf_matrix2, max_length_mat)
 
-    print('frames: ', f)
-    print('relen: ', len(re_matrix1[0]))
-    print('iplen: ', len(ip_set1[0]))
+            # if len(re_matrix1[0]) > 0:
+            #     print(np.linalg.norm(ip_set1[0][-1][0]['B']-ip_set1[0][-1][0]['H']))
     if feature_q1 is not None:
         feature_q1.put(re_matrix1)
         feature_q1.put(gf_matrix1)

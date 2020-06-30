@@ -25,7 +25,7 @@ class Processor(object):
             y = kp_set[i, :, 1]
             v = kp_set[i, :, 2]
             if not np.any(v > 0):
-                return
+                return None
 
             # keypoint bounding box
             x1, x2 = np.min(x[v > 0]), np.max(x[v > 0])
@@ -73,5 +73,5 @@ class Processor(object):
         keypoint_sets[:, :, 0] /= processed_image_cpu.shape[2]
         keypoint_sets[:, :, 1] /= processed_image_cpu.shape[1]
 
-        bboxes = self.get_bb(keypoint_sets)
-        return keypoint_sets, bboxes, width_height
+        # bboxes = self.get_bb(keypoint_sets)
+        return keypoint_sets, width_height

@@ -13,12 +13,10 @@ import re
 import pandas as pd
 
 
-def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecutive_frames=DEFAULT_CONSEC_FRAMES):
-    print('main started')
-
+def get_source(args):
     tagged_df = None
     if args.video is None:
-        logging.debug('Video source: webcam')
+        # logging.debug(f'Video source {i}: webcam')
         cam = cv2.VideoCapture(0)
     else:
         logging.debug(f'Video source: {args.video}')
@@ -29,18 +27,28 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
                                     "TimeStamps", "Subject", "Activity", "Trial", "Tag"], skipinitialspace=True)
             tagged_df = tagged_df.query(
                 f'Subject == {vid[1]} & Activity == {vid[0]} & Trial == {vid[2]}')
+    return cam, tagged_df
+
+
+def resize(img, resize, resolution):
+    # Resize the video
+    if resize is None:
+        height, width = img.shape[:2]
+    else:
+        width, height = [int(dim) for dim in resize.split('x')]
+    width_height = (int(width * resolution // 16) * 16,
+                    int(height * resolution // 16) * 16)
+    return width, height, width_height
+
+
+def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecutive_frames=DEFAULT_CONSEC_FRAMES):
+    print('main started')
+
+    cam, tagged_df = get_source(args)
 
     ret_val, img = cam.read()
 
-    # Resize the video
-    if args.resize is None:
-        height, width = img.shape[:2]
-    else:
-        width, height = [int(dim) for dim in args.resize.split('x')]
-
-    # width_height = (width, height)
-    width_height = (int(width * args.resolution // 16) * 16,
-                    int(height * args.resolution // 16) * 16)
+    width, height, width_height = resize(img, args.resize, args.resolution)
     logging.debug(f'Target width and height = {width_height}')
     processor_singleton = Processor(width_height, args)
 
@@ -77,16 +85,17 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
 
         img = cv2.resize(img, (width, height))
 
-        keypoint_sets, bboxes, width_height = processor_singleton.single_image(img)
+        keypoint_sets, width_height = processor_singleton.single_image(img)
 
         if args.coco_points:
             keypoint_sets = [keypoints.tolist() for keypoints in keypoint_sets]
         else:
-            keypoint_sets = [(get_kp(keypoints.tolist()), curr_time) for keypoints in keypoint_sets]
+            anns = [get_kp(keypoints.tolist()) for keypoints in keypoint_sets]
+            keypoint_sets = [(ann[0], curr_time) for ann in anns]
+            bboxes = [(np.asarray([width, height])*np.asarray(ann[1])).astype('int32')
+                      for ann in anns]
 
-        bboxes = [(int(width*bbox[0]), int(height*bbox[1]),
-                   int(width*bbox[2]), int(height*bbox[3])) for bbox in bboxes]
-        [cv2.rectangle(img, bbox[0:2], bbox[2:], (0, 0, 0), 2) for bbox in bboxes]
+            [cv2.polylines(img, bboxes, False, (0, 0, 0), 2) for bbox in bboxes]
         # print(bboxes[0])
         hist_list = [get_hist(img, bbox) for bbox in bboxes]
         # plt.clf()

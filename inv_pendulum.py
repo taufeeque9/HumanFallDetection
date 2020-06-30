@@ -39,6 +39,12 @@ def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_C
         i += 1
 
 
+def extend_vector(p1, p2, l):
+    p1 += (p1-p2)*l/(2*np.linalg.norm((p1-p2), 2))
+    p2 -= (p1-p2)*l/(2*np.linalg.norm((p1-p2), 2))
+    return p1, p2
+
+
 def get_kp(kp):
     threshold1 = 5e-3
     # dict of np arrays of coordinates
@@ -80,7 +86,17 @@ def get_kp(kp):
     else:
         inv_pend['KR'] = None
 
-    return inv_pend
+    if inv_pend['B'] is not None and inv_pend['N'] is not None:
+        height = np.linalg.norm(inv_pend['N'] - inv_pend['B'], 2)
+        LS, RS = extend_vector(np.asarray(kp[CocoPart.LShoulder][:2]),
+                               np.asarray(kp[CocoPart.RShoulder][:2]), height/4)
+        LB, RB = extend_vector(np.asarray(kp[CocoPart.LHip][:2]),
+                               np.asarray(kp[CocoPart.RHip][:2]), height/3)
+        bbox = (LS, RS, RB, LB, LS)
+    else:
+        bbox = ([0, 0], [0, 0])
+
+    return inv_pend, bbox
 
 
 def get_angle(v0, v1):
