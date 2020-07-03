@@ -6,19 +6,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from visual import write_on_image, visualise, activity_dict
 from processor import Processor
-from helpers import pop_and_add, last_ip, dist, move_figure
+from helpers import pop_and_add, move_figure, get_hist
 from default_params import *
 from inv_pendulum import *
 import re
 import pandas as pd
 
 
-def extract_keypoints_parallel(queue, args, self_counter , other_counter, consecutive_frames=DEFAULT_CONSEC_FRAMES):
-    print('main started')
-
+def get_source(args):
     tagged_df = None
     if args.video is None:
-        logging.debug('Video source: webcam')
+        # logging.debug(f'Video source {i}: webcam')
         cam = cv2.VideoCapture(0)
     else:
         logging.debug(f'Video source: {args.video}')
@@ -29,18 +27,28 @@ def extract_keypoints_parallel(queue, args, self_counter , other_counter, consec
                                     "TimeStamps", "Subject", "Activity", "Trial", "Tag"], skipinitialspace=True)
             tagged_df = tagged_df.query(
                 f'Subject == {vid[1]} & Activity == {vid[0]} & Trial == {vid[2]}')
+    return cam, tagged_df
+
+
+def resize(img, resize, resolution):
+    # Resize the video
+    if resize is None:
+        height, width = img.shape[:2]
+    else:
+        width, height = [int(dim) for dim in resize.split('x')]
+    width_height = (int(width * resolution // 16) * 16,
+                    int(height * resolution // 16) * 16)
+    return width, height, width_height
+
+
+def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecutive_frames=DEFAULT_CONSEC_FRAMES):
+    print('main started')
+
+    cam, tagged_df = get_source(args)
 
     ret_val, img = cam.read()
 
-    # Resize the video
-    if args.resize is None:
-        height, width = img.shape[:2]
-    else:
-        width, height = [int(dim) for dim in args.resize.split('x')]
-
-    # width_height = (width, height)
-    width_height = (int(width * args.resolution // 16) * 16,
-                    int(height * args.resolution // 16) * 16)
+    width, height, width_height = resize(img, args.resize, args.resolution)
     logging.debug(f'Target width and height = {width_height}')
     processor_singleton = Processor(width_height, args)
 
@@ -68,7 +76,7 @@ def extract_keypoints_parallel(queue, args, self_counter , other_counter, consec
         if img is None:
             print('no more images captured')
             queue.put(None)
-            print(args.video, curr_time,sep=" ")
+            print(args.video, curr_time, sep=" ")
             break
 
         if cv2.waitKey(1) == 27 or cv2.getWindowProperty(args.video, cv2.WND_PROP_VISIBLE) < 1:
@@ -77,14 +85,27 @@ def extract_keypoints_parallel(queue, args, self_counter , other_counter, consec
 
         img = cv2.resize(img, (width, height))
 
-        keypoint_sets, scores, width_height = processor_singleton.single_image(
-            b64image=base64.b64encode(cv2.imencode('.jpg', img)[1]).decode('UTF-8')
-        )
+        keypoint_sets, width_height = processor_singleton.single_image(img)
 
         if args.coco_points:
             keypoint_sets = [keypoints.tolist() for keypoints in keypoint_sets]
         else:
-            keypoint_sets = [(get_kp(keypoints.tolist()), curr_time) for keypoints in keypoint_sets]
+            anns = [get_kp(keypoints.tolist()) for keypoints in keypoint_sets]
+            keypoint_sets = [(ann[0], curr_time) for ann in anns]
+            ubboxes = [(np.asarray([width, height])*np.asarray(ann[1])).astype('int32')
+                       for ann in anns]
+            lbboxes = [(np.asarray([width, height])*np.asarray(ann[2])).astype('int32')
+                       for ann in anns]
+
+            cv2.polylines(img, ubboxes, True, (255, 0, 0), 2)
+            cv2.polylines(img, lbboxes, True, (0, 255, 0), 2)
+        # print(bboxes[0])
+        uhist_list = [get_hist(img, bbox) for bbox in ubboxes]
+        lhist_list = [get_hist(img, bbox) for bbox in lbboxes]
+        # plt.clf()
+        # plt.plot(hist_list[0][:, 5, 5])
+        # plt.draw()
+        # plt.pause(1e-17)
 
         queue.put(keypoint_sets)
         img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
@@ -113,7 +134,7 @@ def extract_keypoints_parallel(queue, args, self_counter , other_counter, consec
     print(f"Frames in {max_time}secs: {frame}")
     cv2.destroyWindow(args.video)
     queue.put(None)
-    return 
+    return
 
 
 def alg2_parallel(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q=None):
@@ -142,17 +163,17 @@ def alg2_parallel(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, f
                 if ip_set[i][-1] is not None:
                     if ip_set[i][-2] is not None:
                         pop_and_add(re_matrix[i], get_rot_energy(
-                                    ip_set[i][-2], ip_set[i][-1]), max_length_mat )
+                                    ip_set[i][-2], ip_set[i][-1]), max_length_mat)
                     elif ip_set[i][-3] is not None:
                         pop_and_add(re_matrix[i], get_rot_energy(
-                                    ip_set[i][-3], ip_set[i][-1]), max_length_mat )
+                                    ip_set[i][-3], ip_set[i][-1]), max_length_mat)
                     elif ip_set[i][-4] is not None:
                         pop_and_add(re_matrix[i], get_rot_energy(
-                                    ip_set[i][-4], ip_set[i][-1]), max_length_mat )
+                                    ip_set[i][-4], ip_set[i][-1]), max_length_mat)
                     else:
-                        pop_and_add(re_matrix[i], 0, max_length_mat )
+                        pop_and_add(re_matrix[i], 0, max_length_mat)
                 else:
-                    pop_and_add(re_matrix[i], 0, max_length_mat )
+                    pop_and_add(re_matrix[i], 0, max_length_mat)
 
             for i in range(len(ip_set)):
                 if ip_set[i][-1] is not None:
@@ -174,7 +195,7 @@ def alg2_parallel(queue, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, f
 
                 else:
 
-                    pop_and_add(gf_matrix[i], 0, max_length_mat )
+                    pop_and_add(gf_matrix[i], 0, max_length_mat)
         if not plot_graph:
             continue
         if feature_q is None and len(re_matrix) > 0:

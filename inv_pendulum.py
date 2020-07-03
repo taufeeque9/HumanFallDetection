@@ -3,6 +3,7 @@ import numpy as np
 from helpers import *
 from default_params import *
 
+
 def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     len_ip_set = len(ip_set)
     added = [False for _ in range(len_ip_set)]
@@ -18,8 +19,8 @@ def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_C
 
         if cmin[1] == -1:
             ip_set.append([None for _ in range(consecutive_frames - 1)] + [new_ip])
-            re_matrix.append([0 for _ in range(consecutive_frames )])
-            gf_matrix.append([0 for _ in range(consecutive_frames )])
+            re_matrix.append([])
+            gf_matrix.append([])
 
         else:
             added[cmin[1]] = True
@@ -36,6 +37,34 @@ def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_C
                 added.pop(i)
                 continue
         i += 1
+
+
+def extend_vector(p1, p2, l):
+    p1 += (p1-p2)*l/(2*np.linalg.norm((p1-p2), 2))
+    p2 -= (p1-p2)*l/(2*np.linalg.norm((p1-p2), 2))
+    return p1, p2
+
+
+def perp(a):
+    b = np.empty_like(a)
+    b[0] = -a[1]
+    b[1] = a[0]
+    return b
+
+# line segment a given by endpoints a1, a2
+# line segment b given by endpoints b1, b2
+# return
+
+
+def seg_intersect(a1, a2, b1, b2):
+    da = a2-a1
+    db = b2-b1
+    dp = a1-b1
+    dap = perp(da)
+    denom = np.dot(dap, db)
+    num = np.dot(dap, dp)
+    return (num / denom.astype(float))*db + b1
+
 
 def get_kp(kp):
     threshold1 = 5e-3
@@ -54,14 +83,14 @@ def get_kp(kp):
     else:
         inv_pend['H'] = np.array([numx/den, numy/den])
 
-    if all([kp[CocoPart.LShoulder] is not None, kp[CocoPart.RShoulder] is not None,
+    if all([kp[CocoPart.LShoulder], kp[CocoPart.RShoulder],
             kp[CocoPart.LShoulder][2] > threshold1, kp[CocoPart.RShoulder][2] > threshold1]):
         inv_pend['N'] = np.array([(kp[CocoPart.LShoulder][0]+kp[CocoPart.RShoulder][0])/2,
                                   (kp[CocoPart.LShoulder][1]+kp[CocoPart.RShoulder][1])/2])
     else:
         inv_pend['N'] = None
 
-    if all([kp[CocoPart.LHip] is not None, kp[CocoPart.RHip] is not None,
+    if all([kp[CocoPart.LHip], kp[CocoPart.RHip],
             kp[CocoPart.LHip][2] > threshold1, kp[CocoPart.RHip][2] > threshold1]):
         inv_pend['B'] = np.array([(kp[CocoPart.LHip][0]+kp[CocoPart.RHip][0])/2,
                                   (kp[CocoPart.LHip][1]+kp[CocoPart.RHip][1])/2])
@@ -78,7 +107,31 @@ def get_kp(kp):
     else:
         inv_pend['KR'] = None
 
-    return inv_pend
+    if inv_pend['B'] is not None:
+        if inv_pend['N'] is not None:
+            height = np.linalg.norm(inv_pend['N'] - inv_pend['B'], 2)
+            LS, RS = extend_vector(np.asarray(kp[CocoPart.LShoulder][:2]),
+                                   np.asarray(kp[CocoPart.RShoulder][:2]), height/4)
+            LB, RB = extend_vector(np.asarray(kp[CocoPart.LHip][:2]),
+                                   np.asarray(kp[CocoPart.RHip][:2]), height/3)
+            ubbox = (LS, RS, RB, LB)
+
+            if inv_pend['KL'] is not None and inv_pend['KR'] is not None:
+                lbbox = (LB, RB, inv_pend['KR'], inv_pend['KL'])
+            else:
+                lbbox = ([0, 0], [0, 0])
+        else:
+            ubbox = ([0, 0], [0, 0])
+            if inv_pend['KL'] is not None and inv_pend['KR'] is not None:
+                lbbox = (np.array(kp[CocoPart.LHip][:2]), np.array(kp[CocoPart.RHip][:2]),
+                         inv_pend['KR'], inv_pend['KL'])
+            else:
+                lbbox = ([0, 0], [0, 0])
+    else:
+        ubbox = ([0, 0], [0, 0])
+        lbbox = ([0, 0], [0, 0])
+
+    return inv_pend, ubbox, lbbox
 
 
 def get_angle(v0, v1):

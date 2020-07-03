@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib
+import cv2
+from PIL import Image, ImageDraw
 
 
 def pop_and_add(l, val, max_length):
@@ -31,3 +33,13 @@ def move_figure(f, x, y):
         # This works for QT and GTK
         # You can also use window.setGeometry
         f.canvas.manager.window.move(x, y)
+
+
+def get_hist(img, bbox, nbins=10):
+    mask = Image.new('L', (img.shape[1], img.shape[0]), 0)
+    ImageDraw.Draw(mask).polygon(bbox, outline=1, fill=1)
+    mask = np.array(mask)
+    hist = cv2.calcHist([img], [0, 1, 2], mask, [nbins, nbins, nbins], [0, 256, 0, 256, 0, 256])
+    hist /= img.shape[0]*img.shape[1]
+
+    return hist

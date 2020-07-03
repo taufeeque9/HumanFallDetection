@@ -69,11 +69,11 @@ if __name__ == "__main__":
         [axis.legend() for axis in ax.ravel()]
         [axis.set_xlim(maxx, 0) for raxis in ax for axis in raxis[:2]]
         fig.tight_layout()
-        # from pathlib import Path
-        # plot_file = Path(f"dataset/Activity{i}/Subject{get_id(start)[0]}/feature_plot.png")
-        # if plot_file.is_file():
-        #     os.remove(f"dataset/Activity{i}/Subject{get_id(start)[0]}/feature_plot.png")
-        # fig.savefig(f"dataset/Activity{i}/Subject{get_id(start)[0]}/feature_plot.png")
+        from pathlib import Path
+        plot_file = Path(f"dataset/Activity{i}/Subject{get_id(start)[0]}/feature_plot.png")
+        if plot_file.is_file():
+            os.remove(f"dataset/Activity{i}/Subject{get_id(start)[0]}/feature_plot.png")
+        fig.savefig(f"dataset/Activity{i}/Subject{get_id(start)[0]}/feature_plot.png")
         plt.show()
 
     def generate_data():
@@ -99,11 +99,11 @@ if __name__ == "__main__":
                                 re_writer.writerow(re_matrix)
                                 gf_writer.writerow(gf_matrix)
 
-    if len(sys.argv) > 1 and '--activity' in sys.argv[1]:
-        if len(sys.argv) > 2 and '--sub_range' in sys.argv[2]:
-            range = [int(f) for f in sys.argv[2].split('=')[1].split(',')]
-            plot_data(int(sys.argv[1].split('activity')[1]), (range[0]-1)*6, (range[1]-1)*6)
+    # if len(sys.argv) > 1 and '--activity' in sys.argv[1]:
+    #     if len(sys.argv) > 2 and '--sub_range' in sys.argv[2]:
+    #         range = [int(f) for f in sys.argv[2].split('=')[1].split(',')]
+    #         plot_data(int(sys.argv[1].split('activity')[1]), (range[0]-1)*6, (range[1]-1)*6)
 
-    # for act_id in range(1, 11):
-    #     for sub_id in range(1, 18):
-    #         plot_data(act_id, (sub_id-1)*6, (sub_id-1)*6+6)
+    for act_id in range(1, 2):
+        for sub_id in range(1, 2):
+            plot_data(act_id, (sub_id-1)*6, (sub_id-1)*6+6)
