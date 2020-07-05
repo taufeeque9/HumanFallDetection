@@ -139,14 +139,14 @@ def get_angle(v0, v1):
 
 
 def is_valid(ip):
-    ip = ip[0]
+    ip = ip["keypoints"]
     return (ip['B'] is not None and ip['N'] is not None and ip['H'] is not None)
 
 
 def get_rot_energy(ip0, ip1):
-    t = ip1[1] - ip0[1]
-    ip0 = ip0[0]
-    ip1 = ip1[0]
+    t = ip1["time"] - ip0["time"]
+    ip0 = ip0["keypoints"]
+    ip1 = ip1["keypoints"]
     m1 = 1
     m2 = 5
     m3 = 5
@@ -182,11 +182,11 @@ def get_angle_vertical(v):
 
 
 def get_gf(ip0, ip1, ip2, t1=1, t2=1):
-    t1 = ip1[1] - ip0[1]
-    t2 = ip2[1] - ip1[1]
-    ip0 = ip0[0]
-    ip1 = ip1[0]
-    ip2 = ip2[0]
+    t1 = ip1["time"] - ip0["time"]
+    t2 = ip2["time"] - ip1["time"]
+    ip0 = ip0["keypoints"]
+    ip1 = ip1["keypoints"]
+    ip2 = ip2["keypoints"]
 
     m1 = 1
     m2 = 5

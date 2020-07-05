@@ -83,6 +83,7 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
             queue.put(None)
             break
 
+
         img = cv2.resize(img, (width, height))
 
         keypoint_sets, width_height = processor_singleton.single_image(img)
@@ -91,21 +92,19 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
             keypoint_sets = [keypoints.tolist() for keypoints in keypoint_sets]
         else:
             anns = [get_kp(keypoints.tolist()) for keypoints in keypoint_sets]
-            keypoint_sets = [(ann[0], curr_time) for ann in anns]
             ubboxes = [(np.asarray([width, height])*np.asarray(ann[1])).astype('int32')
                        for ann in anns]
             lbboxes = [(np.asarray([width, height])*np.asarray(ann[2])).astype('int32')
                        for ann in anns]
-
+            uhist_list = [get_hist(img, bbox) for bbox in ubboxes]
+            lhist_list = [get_hist(img, bbox) for bbox in lbboxes]
+            keypoint_sets = [{"keypoints":keyp[0],"up_hist":uh,"lo_hist":lh,"time":curr_time} for keyp,uh,lh in zip(anns,uhist_list,lhist_list)]
+            
             cv2.polylines(img, ubboxes, True, (255, 0, 0), 2)
             cv2.polylines(img, lbboxes, True, (0, 255, 0), 2)
-        # print(bboxes[0])
-        uhist_list = [get_hist(img, bbox) for bbox in ubboxes]
-        lhist_list = [get_hist(img, bbox) for bbox in lbboxes]
-        # plt.clf()
-        # plt.plot(hist_list[0][:, 5, 5])
-        # plt.draw()
-        # plt.pause(1e-17)
+
+
+        
 
         queue.put(keypoint_sets)
         img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
@@ -131,9 +130,12 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
         else:
             output_video.write(img)
         cv2.imshow(args.video, img)
+
+        
     print(f"Frames in {max_time}secs: {frame}")
     cv2.destroyWindow(args.video)
     queue.put(None)
+    
     return
 
 

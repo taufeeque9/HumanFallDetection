@@ -17,8 +17,8 @@ def last_ip(ips):
 
 
 def dist(ip1, ip2):
-    ip1 = ip1[0]
-    ip2 = ip2[0]
+    ip1 = ip1["keypoints"]
+    ip2 = ip2["keypoints"]
     return np.sqrt(np.sum((ip1['N']-ip2['N'])**2 + (ip1['B']-ip2['B'])**2))
 
 
@@ -35,11 +35,10 @@ def move_figure(f, x, y):
         f.canvas.manager.window.move(x, y)
 
 
-def get_hist(img, bbox, nbins=10):
+def get_hist(img, bbox, nbins=2):
     mask = Image.new('L', (img.shape[1], img.shape[0]), 0)
-    ImageDraw.Draw(mask).polygon(bbox, outline=1, fill=1)
+    ImageDraw.Draw(mask).polygon(list(bbox.flatten()), outline=1, fill=1)
     mask = np.array(mask)
     hist = cv2.calcHist([img], [0, 1, 2], mask, [nbins, nbins, nbins], [0, 256, 0, 256, 0, 256])
-    hist /= img.shape[0]*img.shape[1]
 
     return hist

@@ -161,6 +161,9 @@ def alg2_sequential(queue1, queue2, plot_graph, consecutive_frames=DEFAULT_CONSE
             get_frame_features(ip_set1, new_frame1, re_matrix1, gf_matrix1, max_length_mat)
             get_frame_features(ip_set2, new_frame2, re_matrix2, gf_matrix2, max_length_mat)
 
+            print(re_matrix1)
+            print(re_matrix2)
+
             # if len(re_matrix1[0]) > 0:
             #     print(np.linalg.norm(ip_set1[0][-1][0]['B']-ip_set1[0][-1][0]['H']))
     if feature_q1 is not None:
