@@ -57,8 +57,8 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
     frame = 0
     fps = 0
     t0 = time.time()
-    cv2.namedWindow(args.video)
-    max_time = 30
+    #cv2.namedWindow(args.video)
+    max_time = 1000
     while time.time() - t0 < max_time:
         # print(args.video,self_counter.value,other_counter.value,sep=" ")
         if(self_counter.value > other_counter.value):
@@ -79,9 +79,9 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
             print(args.video, curr_time, sep=" ")
             break
 
-        if cv2.waitKey(1) == 27 or cv2.getWindowProperty(args.video, cv2.WND_PROP_VISIBLE) < 1:
-            queue.put(None)
-            break
+        # if cv2.waitKey(1) == 27 or cv2.getWindowProperty(args.video, cv2.WND_PROP_VISIBLE) < 1:
+        #     queue.put(None)
+        #     break
 
 
         img = cv2.resize(img, (width, height))
@@ -103,20 +103,17 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
             cv2.polylines(img, ubboxes, True, (255, 0, 0), 2)
             cv2.polylines(img, lbboxes, True, (0, 255, 0), 2)
 
-
         
+        #img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
+        #                vis_skeleton=args.skeleton, CocoPointsOn=args.coco_points)
 
-        queue.put(keypoint_sets)
-        img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
-                        vis_skeleton=args.skeleton, CocoPointsOn=args.coco_points)
-
-        if tagged_df is None:
-            img = write_on_image(
-                img=img, text=f"Avg FPS: {frame//(time.time()-t0)}, Frame: {frame}", color=[0, 0, 0])
-        else:
-            img = write_on_image(img=img,
-                                 text=f"Avg FPS: {frame//(time.time()-t0)}, Frame: {frame}, Tag: {activity_dict[tagged_df.iloc[frame-1]['Tag']]}",
-                                 color=[0, 0, 0])
+        # if tagged_df is None:
+        #     img = write_on_image(
+        #         img=img, text=f"Avg FPS: {frame//(time.time()-t0)}, Frame: {frame}", color=[0, 0, 0])
+        # else:
+        #     img = write_on_image(img=img,
+        #                          text=f"Avg FPS: {frame//(time.time()-t0)}, Frame: {frame}, Tag: {activity_dict[tagged_df.iloc[frame-1]['Tag']]}",
+        #                          color=[0, 0, 0])
 
         if output_video is None:
             if args.save_output:
@@ -129,11 +126,15 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
                 logging.debug(f'Not saving the output video')
         else:
             output_video.write(img)
-        cv2.imshow(args.video, img)
+        dict_vis = {"img":img,"keypoint_sets":keypoint_sets,"width":width,"height":height,"vis_keypoints":args.joints,
+                    "vis_skeleton":args.skeleton,"CocoPointsOn":args.coco_points,
+                    "tagged_df":{"text":f"Avg FPS: {frame//(time.time()-t0)}, Frame: {frame}","color":[0,0,0]}}        
+        queue.put(dict_vis)
+        #cv2.imshow(args.video, img)
 
         
     print(f"Frames in {max_time}secs: {frame}")
-    cv2.destroyWindow(args.video)
+    #cv2.destroyWindow(args.video)
     queue.put(None)
     
     return

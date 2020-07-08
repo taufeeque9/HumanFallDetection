@@ -4,12 +4,16 @@ from helpers import *
 from default_params import *
 
 
-def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_CONSEC_FRAMES):
+def match_ip(ip_set, new_ips, re_matrix, gf_matrix,num_matched ,consecutive_frames=DEFAULT_CONSEC_FRAMES):
     len_ip_set = len(ip_set)
     added = [False for _ in range(len_ip_set)]
+
+
+    new_len_ip_set = len_ip_set
     for new_ip in new_ips:
         if not is_valid(new_ip):
             continue
+        assert valid_candidate_hist(new_ip)
         cmin = [MIN_THRESH, -1]
         for i in range(len_ip_set):
             if not added[i] and dist(last_ip(ip_set[i])[0], new_ip) < cmin[0]:
@@ -21,22 +25,37 @@ def match_ip(ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_C
             ip_set.append([None for _ in range(consecutive_frames - 1)] + [new_ip])
             re_matrix.append([])
             gf_matrix.append([])
+            new_len_ip_set += 1
 
         else:
             added[cmin[1]] = True
             pop_and_add(ip_set[cmin[1]], new_ip, consecutive_frames)
 
-    i = 0
-    while i < len(added):
+    new_matched = num_matched
+
+    removed_indx = []
+    removed_match = []
+
+    for i in range(len(added)):
         if not added[i]:
             pop_and_add(ip_set[i], None, consecutive_frames)
-            if ip_set[i] == [None for _ in range(consecutive_frames)]:
-                ip_set.pop(i)
-                re_matrix.pop(i)
-                gf_matrix.pop(i)
-                added.pop(i)
-                continue
-        i += 1
+        if ip_set[i] == [None for _ in range(consecutive_frames)]:
+            if i < num_matched:
+                new_matched -= 1
+                removed_match.append(i)
+
+            new_len_ip_set -= 1
+
+            removed_indx.append(i)
+            
+
+    for i in sorted(removed_indx,reverse=True):           
+        ip_set.pop(i)
+        re_matrix.pop(i)
+        gf_matrix.pop(i)
+
+
+    return new_matched,new_len_ip_set,removed_match
 
 
 def extend_vector(p1, p2, l):
@@ -77,8 +96,8 @@ def get_kp(kp):
             kp[CocoPart.REye][2]*kp[CocoPart.REye][1] + kp[CocoPart.REar][2]*kp[CocoPart.REar][1])
     den = kp[CocoPart.LEar][2] + kp[CocoPart.LEye][2] + kp[CocoPart.REye][2] + kp[CocoPart.REar][2]
 
-    if den - kp[CocoPart.LEar][2] < 30*threshold1 or den - kp[CocoPart.LEye][2] < 30*threshold1 or \
-       den - kp[CocoPart.REar][2] < 30*threshold1 or den - kp[CocoPart.REye][2] < 30*threshold1:
+    if den - kp[CocoPart.LEar][2] < 2*threshold1 or den - kp[CocoPart.LEye][2] < 2*threshold1 or \
+       den - kp[CocoPart.REar][2] < 2*threshold1 or den - kp[CocoPart.REye][2] < 2*threshold1:
         inv_pend['H'] = None
     else:
         inv_pend['H'] = np.array([numx/den, numy/den])
@@ -120,16 +139,25 @@ def get_kp(kp):
                 lbbox = (LB, RB, inv_pend['KR'], inv_pend['KL'])
             else:
                 lbbox = ([0, 0], [0, 0])
+                #lbbox = None
         else:
             ubbox = ([0, 0], [0, 0])
+            #ubbox = None
             if inv_pend['KL'] is not None and inv_pend['KR'] is not None:
                 lbbox = (np.array(kp[CocoPart.LHip][:2]), np.array(kp[CocoPart.RHip][:2]),
                          inv_pend['KR'], inv_pend['KL'])
             else:
                 lbbox = ([0, 0], [0, 0])
+                #lbbox = None
     else:
         ubbox = ([0, 0], [0, 0])
         lbbox = ([0, 0], [0, 0])
+        #ubbox = None
+        #lbbox = None
+    condition = ( inv_pend["H"] is None ) and ( inv_pend['N'] is not None and inv_pend['B'] is not None)
+    if condition:
+        print("half disp")
+
 
     return inv_pend, ubbox, lbbox
 
@@ -139,6 +167,9 @@ def get_angle(v0, v1):
 
 
 def is_valid(ip):
+
+    assert ip is not None
+
     ip = ip["keypoints"]
     return (ip['B'] is not None and ip['N'] is not None and ip['H'] is not None)
 
@@ -250,3 +281,50 @@ def get_gf(ip0, ip1, ip2, t1=1, t2=1):
 
     # print("Energy: ", Q_RD1 + Q_RD2)
     return Q_RD1 + Q_RD2
+
+def match_ip2(matched_ip_set,unmatched_ip_set, new_ips, re_matrix, gf_matrix, consecutive_frames=DEFAULT_CONSEC_FRAMES):
+    len_matched_ip_set = len(matched_ip_set)
+    added_matched = [False for _ in range(len_matched_ip_set)]
+    len_unmatched_ip_set = len(unmatched_ip_set)
+    added_unmatched = [False for _ in range(len_unmatched_ip_set)]
+    for new_ip in new_ips:
+        if not is_valid(new_ip):
+            continue
+        cmin = [MIN_THRESH, -1]
+        connected_set = None
+        connected_added = None
+        for i in range(len_matched_ip_set):
+            if not added_matched[i] and dist(last_ip(matched_ip_set[i])[0], new_ip) < cmin[0]:
+                # here add dome condition that last_ip(ip_set[0] >-5 or someting)
+                cmin[0] = dist(last_ip(matched_ip_set[i])[0], new_ip)
+                cmin[1] = i
+                connected_set = matched_ip_set
+                connected_added = added_matched
+        for i in range(len_unmatched_ip_set):
+            if not added_unmatched[i] and dist(last_ip(unmatched_ip_set[i])[0], new_ip) < cmin[0]:
+                # here add dome condition that last_ip(ip_set[0] >-5 or someting)
+                cmin[0] = dist(last_ip(unmatched_ip_set[i])[0], new_ip)
+                cmin[1] = i
+                connected_set = unmatched_ip_set
+                connected_added = added_unmatched
+    
+        if cmin[1] == -1:
+            unmatched_ip_set.append([None for _ in range(consecutive_frames - 1)] + [new_ip])
+            #re_matrix.append([])
+            #gf_matrix.append([])
+
+        else:
+            connected_added[cmin[1]] = True
+            pop_and_add(connected_set[cmin[1]], new_ip, consecutive_frames)
+
+    i = 0
+    while i < len(added_matched):
+        if not added_matched[i]:
+            pop_and_add(matched_ip_set[i], None, consecutive_frames)
+            if matched_ip_set[i] == [None for _ in range(consecutive_frames)]:
+                matched_ip_set.pop(i)
+                #re_matrix.pop(i)
+                #gf_matrix.pop(i)
+                added_matched.pop(i)
+                continue
+        i += 1

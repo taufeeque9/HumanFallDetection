@@ -4,7 +4,7 @@ import base64
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from visual import write_on_image, visualise, activity_dict
+from visual import write_on_image, visualise, activity_dict,visualise_tracking
 from processor import Processor
 from helpers import pop_and_add, last_ip, dist, move_figure
 from default_params import *
@@ -12,6 +12,18 @@ from inv_pendulum import *
 import re
 import pandas as pd
 
+
+def show_tracked_img(img_dict,ip_set,num_matched):
+    img = img_dict["img"]
+    tagged_df = img_dict["tagged_df"]
+    keypoints_frame = [ person[-1] for person in ip_set ]
+    img = visualise_tracking(img=img, keypoint_sets=keypoints_frame, width=img_dict["width"], height=img_dict["height"],
+                    num_matched=num_matched,vis_keypoints=img_dict["vis_keypoints"],vis_skeleton=img_dict["vis_skeleton"], 
+                    CocoPointsOn=False)
+
+    img = write_on_image(img=img, text=tagged_df["text"],
+                              color=tagged_df["color"])
+    return img
 
 def get_source(args, i):
     tagged_df = None
@@ -42,6 +54,7 @@ def resize(img, resize, resolution):
 
 
 def process_vidframe(queue, args, cam, tagged_df, processor_singleton, width, height, frame, t0, output_video):
+
     ret_val, img = cam.read()
     if tagged_df is None:
         curr_time = time.time()
@@ -138,31 +151,134 @@ def extract_keypoints_sequential(queue1, queue2, args1, args2, consecutive_frame
     print(f"Frames in {max_time}secs: {frame}")
     return
 
+def match_unmatched(unmatched_1,unmatched_2,num_matched):
 
-def alg2_sequential(queue1, queue2, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q1=None, feature_q2=None):
+
+    new_matched_1 = []
+    new_matched_2 = []
+    final_pairs = [[],[]]
+
+    if not unmatched_1 or not unmatched_2:
+        return final_pairs,new_matched_1,new_matched_2
+
+    new_matched = 0
+    correlation_matrix = - np.ones((len(unmatched_1),len(unmatched_2)))
+    dist_matrix = np.zeros((len(unmatched_1),len(unmatched_2)))
+    for i in range(len(unmatched_1)):
+        for j in range(len(unmatched_2)):
+            correlation_matrix[i][j] = cv2.compareHist(last_valid_hist(unmatched_1[i])["up_hist"],last_valid_hist(unmatched_2[j])["up_hist"],cv2.HISTCMP_CORREL)
+            dist_matrix[i][j] = np.sum(np.absolute(last_valid_hist(unmatched_1[i])["up_hist"]-last_valid_hist(unmatched_2[j])["up_hist"]))
+
+
+
+
+    freelist_1 = [ i for i in range(len(unmatched_1))]
+    pair_21 = [-1]*len(unmatched_2)
+    unmatched_1_preferences = np.argsort(-correlation_matrix,axis=1)
+    print("cor",correlation_matrix,sep="\n")
+    print("unmatched_1",unmatched_1_preferences,sep="\n")
+    unmatched_indexes1 = [0]*len(unmatched_1)
+    finish_array = [False]*len(unmatched_1)
+    while freelist_1:
+        um1_idx = freelist_1[-1]
+        if finish_array[um1_idx] == True:
+            freelist_1.pop()
+            continue
+        next_unasked_2 = unmatched_1_preferences[um1_idx][unmatched_indexes1[um1_idx]]
+        if pair_21[next_unasked_2] == -1:
+            pair_21[next_unasked_2] = um1_idx
+            freelist_1.pop()
+        else:
+            curr_paired_2 = pair_21[next_unasked_2]
+            if correlation_matrix[curr_paired_2][next_unasked_2] < correlation_matrix[um1_idx][next_unasked_2]:
+                pair_21[next_unasked_2] = um1_idx
+                freelist_1.pop()
+                if not finish_array[curr_paired_2]:
+                    freelist_1.append(curr_paired_2)
+            
+        unmatched_indexes1[um1_idx] += 1
+        if unmatched_indexes1[um1_idx] == len(unmatched_2):
+            finish_array[um1_idx] = True
+
+    for j,i in enumerate(pair_21):
+        if correlation_matrix[i][j] > HIST_THRESH:
+            final_pairs[0].append(i+num_matched)
+            final_pairs[1].append(j+num_matched)
+            new_matched_1.append(unmatched_1[i])
+            new_matched_2.append(unmatched_2[j])
+
+
+
+    print("finalpairs",final_pairs,sep="\n")
+
+    return final_pairs,new_matched_1,new_matched_2
+def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q1=None, feature_q2=None):
     t0 = time.time()
     re_matrix1, re_matrix2 = [], []
     gf_matrix1, gf_matrix2 = [], []
     ip_set1, ip_set2 = [], []
     max_length_mat = 300
-    if not plot_graph:
+    num_matched = 0
+    if not args1.plot_graph:
         max_length_mat = consecutive_frames
     else:
         f, ax = plt.subplots()
         move_figure(f, 800, 100)
 
-    ip_set1, ip_set2 = [], []
+    cv2.namedWindow(args1.video)
+    cv2.namedWindow(args2.video)
     while True:
         if not queue1.empty() and not queue2.empty():
-            new_frame1 = queue1.get()
-            new_frame2 = queue2.get()
-            if new_frame1 is None or new_frame2 is None:
+            dict_frame1 = queue1.get()
+            dict_frame2 = queue2.get()
+            if dict_frame1 is None or dict_frame2 is None:
                 break
-            get_frame_features(ip_set1, new_frame1, re_matrix1, gf_matrix1, max_length_mat)
-            get_frame_features(ip_set2, new_frame2, re_matrix2, gf_matrix2, max_length_mat)
 
-            print(re_matrix1)
-            print(re_matrix2)
+            if cv2.waitKey(1) == 27 or cv2.getWindowProperty(args1.video, cv2.WND_PROP_VISIBLE) < 1:
+                break
+            if cv2.waitKey(1) == 27 or cv2.getWindowProperty(args2.video, cv2.WND_PROP_VISIBLE) < 1:
+                break
+            kp_frame1 = dict_frame1["keypoint_sets"]
+            kp_frame2 = dict_frame2["keypoint_sets"]
+            num_matched,new_num,indxs_unmatched1 = match_ip(ip_set1, kp_frame1, re_matrix1, gf_matrix1, num_matched , max_length_mat)
+            assert(new_num==len(ip_set1))
+            for i in sorted(indxs_unmatched1,reverse=True):
+                elem = ip_set2[i]
+                ip_set2.pop(i)
+                ip_set2.append(elem)
+            num_matched,new_num,indxs_unmatched2 = match_ip(ip_set2, kp_frame2, re_matrix2, gf_matrix2, num_matched , max_length_mat)
+
+            for i in sorted(indxs_unmatched2,reverse=True):
+                elem = ip_set1[i]
+                ip_set1.pop(i)
+                ip_set1.append(elem)
+
+            unmatched_1 = ip_set1[num_matched:]
+            unmatched_2 = ip_set2[num_matched:]
+
+            new_pairs,new_matched1,new_matched2 = match_unmatched(unmatched_1,unmatched_2,num_matched)
+
+            new_p1 = new_pairs[0]
+            new_p2 = new_pairs[1]
+            for i in sorted(new_p1,reverse=True):
+                ip_set1.pop(i)
+            for i in sorted(new_p2,reverse=True):
+                ip_set2.pop(i)
+
+            ip_set1 = ip_set1[:num_matched] + new_matched1 + ip_set1[num_matched:]
+            ip_set2 = ip_set2[:num_matched] + new_matched2 + ip_set2[num_matched:]
+            # remember to match the energy matrices also
+
+            num_matched = num_matched + len(new_matched1)
+
+            img1 = show_tracked_img(dict_frame1,ip_set1,num_matched)
+            img2 = show_tracked_img(dict_frame2,ip_set2,num_matched)
+            #print(img1.shape)
+            cv2.imshow(args1.video, img1)
+            cv2.imshow(args2.video, img2)
+
+
+    cv2.destroyAllWindows()
 
             # if len(re_matrix1[0]) > 0:
             #     print(np.linalg.norm(ip_set1[0][-1][0]['B']-ip_set1[0][-1][0]['H']))
@@ -177,9 +293,10 @@ def alg2_sequential(queue1, queue2, plot_graph, consecutive_frames=DEFAULT_CONSE
     return
 
 
-def get_frame_features(ip_set, new_frame, re_matrix, gf_matrix, max_length_mat=DEFAULT_CONSEC_FRAMES):
+def get_frame_features(ip_set, new_frame, re_matrix, gf_matrix, num_matched, max_length_mat=DEFAULT_CONSEC_FRAMES):
 
     match_ip(ip_set, new_frame, re_matrix, gf_matrix, max_length_mat)
+    return
     for i in range(len(ip_set)):
         if ip_set[i][-1] is not None:
             if ip_set[i][-2] is not None:

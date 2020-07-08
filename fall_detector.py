@@ -166,7 +166,7 @@ class FallDetector:
         if self.args.coco_points:
             process1_1.join()
             process1_2.join()
-        process2 = mp.Process(target=alg2_sequential, args=(queue1, queue2, self.args.plot_graph,
+        process2 = mp.Process(target=alg2_sequential, args=(queue1, queue2, args1,args2,
                                                             self.consecutive_frames, feature_q_1, feature_q_2))
         process2.start()
         process1_1.join()

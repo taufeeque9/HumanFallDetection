@@ -39,6 +39,10 @@ SKELETON_CONNECTIONS_COCO = [(0, 1, (210, 182, 247)), (0, 2, (127, 127, 127)), (
 SKELETON_CONNECTIONS_5P = [('H', 'N', (210, 182, 247)), ('N', 'B', (210, 182, 247)), ('B', 'KL', (210, 182, 247)),
                            ('B', 'KR', (210, 182, 247)), ('KL', 'KR', (210, 182, 247))]
 
+COLOR_ARRAY = [(210, 182, 247),(127, 127, 127),(194, 119, 227),(199, 199, 199),(34, 189, 188),
+                (141, 219, 219),(207, 190, 23),(150, 152, 255),(189, 103, 148),(138, 223, 152)]
+
+UNMATCHED_COLOR = (180, 119, 31)
 activity_dict = {
     1.0: "Falling forward using hands",
     2.0: "Falling forward using knees",
@@ -106,15 +110,39 @@ def visualise(img: np.ndarray, keypoint_sets: List, width: int, height: int, vis
 
                     cv2.line(img=img, pt1=p1, pt2=p2, color=color, thickness=3)
 
-            # if vis_keypoints:
-            #     for i, kps in enumerate(keypoints):
-            #         # Scale up joint coordinate
-            #         p = (int(kps[0] * width), int(kps[1] * height))
-            #
-            #         # Joint wasn't detected
-            #         if p == (0, 0):
-            #             continue
-            #
-            #         cv2.circle(img=img, center=p, radius=5, color=(255, 255, 255), thickness=-1)
+    return img
+
+def visualise_tracking(img: np.ndarray, keypoint_sets: List, width: int, height: int, num_matched: int,vis_keypoints: bool = False,
+              vis_skeleton: bool = False, CocoPointsOn: bool = False) -> np.ndarray:
+    """Draw keypoints/skeleton on the output video frame."""
+
+    if CocoPointsOn:
+        SKELETON_CONNECTIONS = SKELETON_CONNECTIONS_COCO
+    else:
+        SKELETON_CONNECTIONS = SKELETON_CONNECTIONS_5P
+
+    if vis_keypoints or vis_skeleton:
+        for i,keypoints in enumerate(keypoint_sets):
+            if keypoints is None:
+                continue
+            if not CocoPointsOn:
+                keypoints = keypoints["keypoints"]
+            if vis_skeleton:
+                for p1i, p2i, color in SKELETON_CONNECTIONS:
+                    if keypoints[p1i] is None or keypoints[p2i] is None:
+                        continue
+
+                    p1 = (int(keypoints[p1i][0] * width), int(keypoints[p1i][1] * height))
+                    p2 = (int(keypoints[p2i][0] * width), int(keypoints[p2i][1] * height))
+
+                    if p1 == (0, 0) or p2 == (0, 0):
+                        continue
+                    if i < num_matched:
+                        color = COLOR_ARRAY[i%10]
+                    else:
+                        color = UNMATCHED_COLOR
+
+
+                    cv2.line(img=img, pt1=p1, pt2=p2, color=color, thickness=3)
 
     return img

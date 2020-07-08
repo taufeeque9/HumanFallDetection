@@ -15,6 +15,10 @@ def last_ip(ips):
         if ip is not None:
             return ip, len(ips) - i
 
+def last_valid_hist(ips):
+    for i,ip in enumerate(reversed(ips)):
+        if valid_candidate_hist(ip):
+            return ip
 
 def dist(ip1, ip2):
     ip1 = ip1["keypoints"]
@@ -34,11 +38,37 @@ def move_figure(f, x, y):
         # You can also use window.setGeometry
         f.canvas.manager.window.move(x, y)
 
+def valid_candidate_hist(ip):
+    if ip is not None:
+        return ip["up_hist"] is not None
+    else:
+        return False
 
-def get_hist(img, bbox, nbins=2):
+def dist_hist(ips1,ips2):
+
+    ip1 = last_valid_hist(ips1)
+    ip2 = last_valid_hist(ips2)
+
+    uhist1 = ip1["up_hist"]
+    uhist2 = ip2["up_hist"]
+
+    assert uhist1 is not None
+    assert uhist2 is not None
+
+    assert type(uhist1) == np.ndarray
+
+    return np.sum(np.absolute(uhist1-uhist2))
+
+def get_hist(img, bbox, nbins=3):
+
+    if not np.any(bbox):
+        #print(bbox)
+        return None
+
     mask = Image.new('L', (img.shape[1], img.shape[0]), 0)
     ImageDraw.Draw(mask).polygon(list(bbox.flatten()), outline=1, fill=1)
     mask = np.array(mask)
     hist = cv2.calcHist([img], [0, 1, 2], mask, [nbins, nbins, nbins], [0, 256, 0, 256, 0, 256])
+    cv2.normalize(hist, hist, alpha=1, norm_type=cv2.NORM_L1)
 
     return hist
