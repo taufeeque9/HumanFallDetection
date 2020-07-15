@@ -85,7 +85,7 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
 
 
         img = cv2.resize(img, (width, height))
-
+        hsv_img = cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
         keypoint_sets, width_height = processor_singleton.single_image(img)
 
         if args.coco_points:
@@ -96,14 +96,13 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
                        for ann in anns]
             lbboxes = [(np.asarray([width, height])*np.asarray(ann[2])).astype('int32')
                        for ann in anns]
-            uhist_list = [get_hist(img, bbox) for bbox in ubboxes]
+            uhist_list = [get_hist(hsv_img, bbox) for bbox in ubboxes]
             lhist_list = [get_hist(img, bbox) for bbox in lbboxes]
             keypoint_sets = [{"keypoints":keyp[0],"up_hist":uh,"lo_hist":lh,"time":curr_time} for keyp,uh,lh in zip(anns,uhist_list,lhist_list)]
             
             cv2.polylines(img, ubboxes, True, (255, 0, 0), 2)
             cv2.polylines(img, lbboxes, True, (0, 255, 0), 2)
 
-        
         #img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
         #                vis_skeleton=args.skeleton, CocoPointsOn=args.coco_points)
 

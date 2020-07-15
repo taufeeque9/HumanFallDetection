@@ -87,6 +87,7 @@ def seg_intersect(a1, a2, b1, b2):
 
 def get_kp(kp):
     threshold1 = 5e-3
+
     # dict of np arrays of coordinates
     inv_pend = {}
     # print(type(kp[CocoPart.LEar]))
@@ -96,8 +97,7 @@ def get_kp(kp):
             kp[CocoPart.REye][2]*kp[CocoPart.REye][1] + kp[CocoPart.REar][2]*kp[CocoPart.REar][1])
     den = kp[CocoPart.LEar][2] + kp[CocoPart.LEye][2] + kp[CocoPart.REye][2] + kp[CocoPart.REar][2]
 
-    if den - kp[CocoPart.LEar][2] < 2*threshold1 or den - kp[CocoPart.LEye][2] < 2*threshold1 or \
-       den - kp[CocoPart.REar][2] < 2*threshold1 or den - kp[CocoPart.REye][2] < 2*threshold1:
+    if den < HEAD_THRESHOLD:
         inv_pend['H'] = None
     else:
         inv_pend['H'] = np.array([numx/den, numy/den])
@@ -220,7 +220,7 @@ def get_gf(ip0, ip1, ip2, t1=1, t2=1):
     ip2 = ip2["keypoints"]
 
     m1 = 1
-    m2 = 5
+    m2 = 15
     g = 10
     H2 = ip2['H'] - ip2['N']
     H1 = ip1['H'] - ip1['N']

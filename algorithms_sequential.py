@@ -151,6 +151,20 @@ def extract_keypoints_sequential(queue1, queue2, args1, args2, consecutive_frame
     print(f"Frames in {max_time}secs: {frame}")
     return
 
+def remove_wrongly_matched(matched_1,matched_2):
+
+    unmatched_idxs = []
+    i = 0
+
+    for ip1,ip2 in zip(matched_1,matched_2):
+        #each of these is a set of the last t framses of each matched person
+        correlation = cv2.compareHist(last_valid_hist(ip1)["up_hist"],last_valid_hist(ip2)["up_hist"],cv2.HISTCMP_CORREL)
+        if correlation < 0.5*HIST_THRESH:
+            unmatched_idxs.append(i)
+        i += 1
+
+    return unmatched_idxs
+
 def match_unmatched(unmatched_1,unmatched_2,num_matched):
 
 
@@ -252,6 +266,23 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
                 elem = ip_set1[i]
                 ip_set1.pop(i)
                 ip_set1.append(elem)
+
+
+            matched_1 = ip_set1[:num_matched]
+            matched_2 = ip_set2[:num_matched]
+
+            unmatch_previous = remove_wrongly_matched(matched_1,matched_2)
+            if unmatch_previous:
+                print(unmatch_previous)
+
+            for i in sorted(unmatch_previous,reverse=True):
+                elem1 = ip_set1[i]
+                elem2 = ip_set2[i]
+                ip_set1.pop(i)
+                ip_set2.pop(i)
+                ip_set1.append(elem1)
+                ip_set2.append(elem2)
+                num_matched -= 1
 
             unmatched_1 = ip_set1[num_matched:]
             unmatched_2 = ip_set2[num_matched:]

@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib
+from matplotlib import pyplot as plt
 import cv2
 from PIL import Image, ImageDraw
 
@@ -62,13 +63,13 @@ def dist_hist(ips1,ips2):
 def get_hist(img, bbox, nbins=3):
 
     if not np.any(bbox):
-        #print(bbox)
         return None
 
     mask = Image.new('L', (img.shape[1], img.shape[0]), 0)
     ImageDraw.Draw(mask).polygon(list(bbox.flatten()), outline=1, fill=1)
     mask = np.array(mask)
-    hist = cv2.calcHist([img], [0, 1, 2], mask, [nbins, nbins, nbins], [0, 256, 0, 256, 0, 256])
+    hist = cv2.calcHist([img], [0, 1], mask, [nbins, 2*nbins], [0, 180, 0, 256])
     cv2.normalize(hist, hist, alpha=1, norm_type=cv2.NORM_L1)
+
 
     return hist
