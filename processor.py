@@ -21,9 +21,10 @@ class Processor(object):
     def get_bb(self, kp_set, score=None):
         bb_list = []
         for i in range(kp_set.shape[0]):
-            x = kp_set[i, :, 0]
-            y = kp_set[i, :, 1]
-            v = kp_set[i, :, 2]
+            x = kp_set[i, :15, 0]
+            y = kp_set[i, :15, 1]
+            v = kp_set[i, :15, 2]
+            assert np.any(v>0)
             if not np.any(v > 0):
                 return None
 
@@ -37,7 +38,7 @@ class Processor(object):
                 y1 -= 2.0/self.width_height[1]
                 y2 += 2.0/self.width_height[1]
 
-            bb_list.append((x1, y1, x2, y2))
+            bb_list.append(((x1, y1),(x2, y2)))
 
         # ax.add_patch(
         #     matplotlib.patches.Rectangle(
@@ -73,5 +74,5 @@ class Processor(object):
         keypoint_sets[:, :, 0] /= processed_image_cpu.shape[2]
         keypoint_sets[:, :, 1] /= processed_image_cpu.shape[1]
 
-        # bboxes = self.get_bb(keypoint_sets)
-        return keypoint_sets, width_height
+        bboxes = self.get_bb(keypoint_sets)
+        return keypoint_sets, bboxes, width_height

@@ -86,7 +86,12 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
 
         img = cv2.resize(img, (width, height))
         hsv_img = cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
-        keypoint_sets, width_height = processor_singleton.single_image(img)
+        keypoint_sets, bb_list, width_height = processor_singleton.single_image(img)
+        assert bb_list is None or (type(bb_list) == list)
+        if bb_list:
+            assert type(bb_list[0]) == tuple
+            assert type(bb_list[0][0]) == tuple
+        # assume bb_list is a of the form [(x1,y1),(x2,y2)),etc.]
 
         if args.coco_points:
             keypoint_sets = [keypoints.tolist() for keypoints in keypoint_sets]
@@ -96,12 +101,15 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
                        for ann in anns]
             lbboxes = [(np.asarray([width, height])*np.asarray(ann[2])).astype('int32')
                        for ann in anns]
+            bbox_list = [(np.asarray([width,height])*np.asarray(box)).astype('int32') for box in bb_list]
             uhist_list = [get_hist(hsv_img, bbox) for bbox in ubboxes]
             lhist_list = [get_hist(img, bbox) for bbox in lbboxes]
-            keypoint_sets = [{"keypoints":keyp[0],"up_hist":uh,"lo_hist":lh,"time":curr_time} for keyp,uh,lh in zip(anns,uhist_list,lhist_list)]
+            keypoint_sets = [{"keypoints":keyp[0],"up_hist":uh,"lo_hist":lh,"time":curr_time,"box":box} for keyp,uh,lh,box in zip(anns,uhist_list,lhist_list,bbox_list)]
             
             cv2.polylines(img, ubboxes, True, (255, 0, 0), 2)
             cv2.polylines(img, lbboxes, True, (0, 255, 0), 2)
+            for box in bbox_list:
+                cv2.rectangle(img,tuple(box[0]),tuple(box[1]),((0, 0, 255)),2)
 
         #img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
         #                vis_skeleton=args.skeleton, CocoPointsOn=args.coco_points)

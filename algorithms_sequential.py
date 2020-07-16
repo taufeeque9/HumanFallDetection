@@ -254,13 +254,13 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
                 break
             kp_frame1 = dict_frame1["keypoint_sets"]
             kp_frame2 = dict_frame2["keypoint_sets"]
-            num_matched,new_num,indxs_unmatched1 = match_ip(ip_set1, kp_frame1, re_matrix1, gf_matrix1, num_matched , max_length_mat)
+            num_matched,new_num,indxs_unmatched1 = match_ip(ip_set1, kp_frame1, num_matched , max_length_mat)
             assert(new_num==len(ip_set1))
             for i in sorted(indxs_unmatched1,reverse=True):
                 elem = ip_set2[i]
                 ip_set2.pop(i)
                 ip_set2.append(elem)
-            num_matched,new_num,indxs_unmatched2 = match_ip(ip_set2, kp_frame2, re_matrix2, gf_matrix2, num_matched , max_length_mat)
+            num_matched,new_num,indxs_unmatched2 = match_ip(ip_set2, kp_frame2, num_matched , max_length_mat)
 
             for i in sorted(indxs_unmatched2,reverse=True):
                 elem = ip_set1[i]
@@ -308,7 +308,22 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
             cv2.imshow(args1.video, img1)
             cv2.imshow(args2.video, img2)
 
+            # get features now
 
+            # valid1_idxs = get_all_features(ip_set1)
+            valid2_idxs = get_all_features(ip_set2)
+            continue
+
+            if ip_set2:
+                if ip_set2[0] is not None:
+                    if ip_set2[0][-1] is not None:
+                        print(ip_set2[0][-1]["features"])
+                    else:
+                        print("None")
+                        break
+
+        
+            # each element in the ipset
     cv2.destroyAllWindows()
 
             # if len(re_matrix1[0]) > 0:
@@ -322,6 +337,46 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
 
     print("P2 Over")
     return
+
+def get_all_features(ip_set):
+    valid_idxs = []
+    invalid_idxs = []
+    for i,ips in enumerate(ip_set):
+        # ip set for a particular person
+
+        if ips[-1] is None:
+            invalid_idxs.append(i)
+            continue
+        ips[-1]["features"] = {}
+        # get re, gf, angle, bounding box ratio, ratio derivative
+        last1 = None
+        last2 = None
+        for j in [-2,-3,-4,-5]:
+            if ips[j] is not None:
+                if last1 is None:
+                    last1 = j
+                elif last2 is None:
+                    last2 = j
+
+        ips[-1]["features"]["ratio_bbox"] = FEATURE_SCALAR["ratio_bbox"]*get_ratio_bbox(ips[-1])
+
+        body_vector = ips[-1]["keypoints"]["N"] - ips[-1]["keypoints"]["B"]
+        ips[-1]["features"]["angle_vertical"] = FEATURE_SCALAR["angle_vertical"]*get_angle_vertical(body_vector)
+
+        if last1 is None:
+            invalid_idxs.append(i)
+            continue
+        ips[-1]["features"]["re"] = FEATURE_SCALAR["re"]*get_rot_energy(ips[last1],ips[-1])
+        ips[-1]["features"]["ratio_derivative"] = FEATURE_SCALAR["ratio_derivative"]*get_ratio_derivative(ips[last1],ips[-1])
+
+        if last2 is None:
+            invalid_idxs.append(i)
+            continue
+        ips[-1]["features"]["gf"] = get_gf(ips[last2],ips[last1],ips[-1])
+        valid_idxs.append(i)
+
+
+    return valid_idxs
 
 
 def get_frame_features(ip_set, new_frame, re_matrix, gf_matrix, num_matched, max_length_mat=DEFAULT_CONSEC_FRAMES):
