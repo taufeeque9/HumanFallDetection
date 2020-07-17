@@ -230,6 +230,8 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
     t0 = time.time()
     re_matrix1, re_matrix2 = [], []
     gf_matrix1, gf_matrix2 = [], []
+    feature_plotter1 = [[],[],[],[],[],[]]
+    feature_plotter2 = [[],[],[],[],[],[]]
     ip_set1, ip_set2 = [], []
     max_length_mat = 300
     num_matched = 0
@@ -310,30 +312,41 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
 
             # get features now
 
-            # valid1_idxs = get_all_features(ip_set1)
+            valid1_idxs = get_all_features(ip_set1)
             valid2_idxs = get_all_features(ip_set2)
+            cnt = 0
             continue
+            for ip_set,feature_plotter in zip([ip_set1,ip_set2],[feature_plotter1,feature_plotter2]):
+                plt_f = FEATURE_LIST[cnt]
+                if ip_set and ip_set[0] is not None and ip_set[0][-1] is not None:
+                    #print(ip_set[0][-1]["features"])
+                    feature_plotter[cnt].append(ip_set[0][-1]["features"][plt_f])
+                else:
+                    #print("None")
+                    feature_plotter[cnt].append(0)
+                cnt += 1
 
-            if ip_set2:
-                if ip_set2[0] is not None:
-                    if ip_set2[0][-1] is not None:
-                        print(ip_set2[0][-1]["features"])
-                    else:
-                        print("None")
-                        break
-
-        
-            # each element in the ipset
     cv2.destroyAllWindows()
 
-            # if len(re_matrix1[0]) > 0:
-            #     print(np.linalg.norm(ip_set1[0][-1][0]['B']-ip_set1[0][-1][0]['H']))
     if feature_q1 is not None:
         feature_q1.put(re_matrix1)
         feature_q1.put(gf_matrix1)
     if feature_q2 is not None:
         feature_q2.put(re_matrix2)
         feature_q2.put(gf_matrix2)
+    return 
+
+    for i in range (feature_plotter1):
+        plt.clf()
+        x = np.linspace(1, len(feature_plotter1), len(feature_plotter1))
+        axes = plt.gca()
+        line, = axes.plot(x, feature_plotter1, 'r-')
+        plt.draw()
+        plt.pause(1e-1)
+
+            # if len(re_matrix1[0]) > 0:
+            #     print(np.linalg.norm(ip_set1[0][-1][0]['B']-ip_set1[0][-1][0]['H']))
+
 
     print("P2 Over")
     return
