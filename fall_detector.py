@@ -32,7 +32,7 @@ class FallDetector:
         # TODO: Verify the args since they were changed in v0.10.0
         openpifpaf.decoder.cli(parser, force_complete_pose=True,
                                instance_threshold=0.2, seed_threshold=0.5)
-        openpifpaf.network.nets.cli(parser)
+        openpifpaf.network.cli(parser)
         parser.add_argument('--sequential', default=False, action='store_true',
                             help='Runs both cameras algorithms sequentially')
         parser.add_argument('--resolution', default=0.4, type=float,
@@ -81,7 +81,7 @@ class FallDetector:
             args.pin_memory = True
 
         if args.checkpoint is None:
-            args.checkpoint = 'resnet18'
+            args.checkpoint = 'shufflenetv2k16w'
 
         return args
 
@@ -166,7 +166,7 @@ class FallDetector:
         if self.args.coco_points:
             process1_1.join()
             process1_2.join()
-        process2 = mp.Process(target=alg2_sequential, args=(queue1, queue2, args1,args2,
+        process2 = mp.Process(target=alg2_sequential, args=(queue1, queue2, args1, args2,
                                                             self.consecutive_frames, feature_q_1, feature_q_2))
         process2.start()
         process1_1.join()

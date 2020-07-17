@@ -13,9 +13,10 @@ class Processor(object):
         self.width_height = width_height
 
         # Load model
-        self.model, _ = openpifpaf.network.nets.factory_from_args(args)
+        self.model, _ = openpifpaf.network.factory_from_args(args)
         self.model = self.model.to(args.device)
-        self.processor = openpifpaf.decoder.factory_from_args(args, self.model, args.device)
+        self.processor = openpifpaf.decoder.factory_from_args(args, self.model)
+        # print(self.processor.device)
         self.device = args.device
 
     def get_bb(self, kp_set, score=None):
@@ -24,7 +25,7 @@ class Processor(object):
             x = kp_set[i, :15, 0]
             y = kp_set[i, :15, 1]
             v = kp_set[i, :15, 2]
-            assert np.any(v>0)
+            assert np.any(v > 0)
             if not np.any(v > 0):
                 return None
 
@@ -38,7 +39,7 @@ class Processor(object):
                 y1 -= 2.0/self.width_height[1]
                 y2 += 2.0/self.width_height[1]
 
-            bb_list.append(((x1, y1),(x2, y2)))
+            bb_list.append(((x1, y1), (x2, y2)))
 
         # ax.add_patch(
         #     matplotlib.patches.Rectangle(
@@ -47,6 +48,18 @@ class Processor(object):
         # if score:
         #     ax.text(x1, y1, '{:.4f}'.format(score), fontsize=8, color=color)
         return bb_list
+
+    @staticmethod
+    def keypoint_sets(annotations):
+        keypoint_sets = [ann.data for ann in annotations]
+        # scores = [ann.score() for ann in annotations]
+        # assert len(scores) == len(keypoint_sets)
+        if not keypoint_sets:
+            return np.zeros((0, 17, 3))
+        keypoint_sets = np.array(keypoint_sets)
+        # scores = np.array(scores)
+
+        return keypoint_sets
 
     def single_image(self, image):
         # image_bytes = io.BytesIO(base64.b64decode(b64image))
@@ -62,17 +75,23 @@ class Processor(object):
         width_height = im.size
 
         start = time.time()
-        preprocess = openpifpaf.transforms.EVAL_TRANSFORM
-        processed_image_cpu, _, __ = preprocess(im, [], None)
-        processed_image = processed_image_cpu.contiguous().to(self.device, non_blocking=True)
+        preprocess = openpifpaf.transforms.Compose([
+            openpifpaf.transforms.NormalizeAnnotations(),
+            openpifpaf.transforms.CenterPadTight(16),
+            openpifpaf.transforms.EVAL_TRANSFORM,
+        ])
+        # processed_image, _, __ = preprocess(im, [], None)
+        processed_image = openpifpaf.datasets.PilImageList([im], preprocess=preprocess)[0][0]
+        # processed_image = processed_image_cpu.contiguous().to(self.device, non_blocking=True)
         # print(f'preprocessing time {time.time() - start}')
 
-        all_fields = self.processor.fields(torch.unsqueeze(processed_image.float(), 0))[0]
-        keypoint_sets, scores = self.processor.keypoint_sets(all_fields)
+        all_fields = self.processor.batch(self.model, torch.unsqueeze(
+            processed_image.float(), 0), device=self.device)[0]
+        keypoint_sets = self.keypoint_sets(all_fields)
 
         # Normalize scale
-        keypoint_sets[:, :, 0] /= processed_image_cpu.shape[2]
-        keypoint_sets[:, :, 1] /= processed_image_cpu.shape[1]
+        keypoint_sets[:, :, 0] /= processed_image.shape[2]
+        keypoint_sets[:, :, 1] /= processed_image.shape[1]
 
         bboxes = self.get_bb(keypoint_sets)
         return keypoint_sets, bboxes, width_height
