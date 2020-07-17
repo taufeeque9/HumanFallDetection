@@ -282,6 +282,8 @@ def get_ratio_bbox(ip):
     bbox = ip["box"]
     assert(type(bbox == np.ndarray))
     diff_box = bbox[1] - bbox[0]
+    if diff_box[1] == 0:
+        diff_box[1] += 1e5*diff_box[0]
     assert(np.any(diff_box > 0))
     ratio = diff_box[0]/diff_box[1]
     return ratio
