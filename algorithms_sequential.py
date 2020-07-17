@@ -314,17 +314,21 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
 
             valid1_idxs = get_all_features(ip_set1)
             valid2_idxs = get_all_features(ip_set2)
-            cnt = 0
-            continue
+            DEBUG = False
             for ip_set,feature_plotter in zip([ip_set1,ip_set2],[feature_plotter1,feature_plotter2]):
-                plt_f = FEATURE_LIST[cnt]
-                if ip_set and ip_set[0] is not None and ip_set[0][-1] is not None:
-                    #print(ip_set[0][-1]["features"])
-                    feature_plotter[cnt].append(ip_set[0][-1]["features"][plt_f])
-                else:
-                    #print("None")
-                    feature_plotter[cnt].append(0)
-                cnt += 1
+                for cnt in range(len(FEATURE_LIST)):
+                    plt_f = FEATURE_LIST[cnt]
+                    if ip_set and ip_set[0] is not None and ip_set[0][-1] is not None and plt_f in ip_set[0][-1]["features"]:
+                        #print(ip_set[0][-1]["features"])
+                        feature_plotter[cnt].append(ip_set[0][-1]["features"][plt_f])
+                        if DEBUG and plt_f=="gf":
+                            print(ip_set[-1][-1]["features"][plt_f])
+                            pass
+
+                    else:
+                        #print("None")
+                        feature_plotter[cnt].append(0)
+                DEBUG = True
 
     cv2.destroyAllWindows()
 
@@ -333,17 +337,25 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
         feature_q1.put(gf_matrix1)
     if feature_q2 is not None:
         feature_q2.put(re_matrix2)
-        feature_q2.put(gf_matrix2)
-    return 
+        feature_q2.put(gf_matrix2) 
 
-    for i in range (feature_plotter1):
+    for i,feature_arr in enumerate(feature_plotter1):
         plt.clf()
-        x = np.linspace(1, len(feature_plotter1), len(feature_plotter1))
+        x = np.linspace(1, len(feature_arr), len(feature_arr))
         axes = plt.gca()
-        line, = axes.plot(x, feature_plotter1, 'r-')
-        plt.draw()
-        plt.pause(1e-1)
+        line, = axes.plot(x, feature_arr, 'r-')
+        plt.ylabel(FEATURE_LIST[i])
+        plt.savefig(f'{args1.video}_{FEATURE_LIST[i]}.png')
+        plt.pause(1e-7)
 
+    for i,feature_arr in enumerate(feature_plotter2):
+        plt.clf()
+        x = np.linspace(1, len(feature_arr), len(feature_arr))
+        axes = plt.gca()
+        line, = axes.plot(x, feature_arr, 'r-')
+        plt.ylabel(FEATURE_LIST[i])
+        plt.savefig(f'{args2.video}_{FEATURE_LIST[i]}.png')
+        plt.pause(1e-7)
             # if len(re_matrix1[0]) > 0:
             #     print(np.linalg.norm(ip_set1[0][-1][0]['B']-ip_set1[0][-1][0]['H']))
 
@@ -354,9 +366,9 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
 def get_all_features(ip_set):
     valid_idxs = []
     invalid_idxs = []
+
     for i,ips in enumerate(ip_set):
         # ip set for a particular person
-
         if ips[-1] is None:
             invalid_idxs.append(i)
             continue
@@ -375,6 +387,8 @@ def get_all_features(ip_set):
 
         body_vector = ips[-1]["keypoints"]["N"] - ips[-1]["keypoints"]["B"]
         ips[-1]["features"]["angle_vertical"] = FEATURE_SCALAR["angle_vertical"]*get_angle_vertical(body_vector)
+        ips[-1]["features"]["log_angle"] = FEATURE_SCALAR["log_angle"]*np.log(1 + np.abs(ips[-1]["features"]["angle_vertical"]))
+        
 
         if last1 is None:
             invalid_idxs.append(i)

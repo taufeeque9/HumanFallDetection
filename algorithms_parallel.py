@@ -58,9 +58,8 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
     fps = 0
     t0 = time.time()
     #cv2.namedWindow(args.video)
-    frame_limit = 75
     max_time = 1000
-    while time.time() - t0 < max_time and frame < frame_limit:
+    while time.time() - t0 < max_time:
         # print(args.video,self_counter.value,other_counter.value,sep=" ")
         if(self_counter.value > other_counter.value):
             continue

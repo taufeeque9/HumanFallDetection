@@ -189,14 +189,6 @@ def get_rot_energy(ip0, ip1):
     w1sq = (get_angle(H0, H1)/t)**2
     energy += m1*d1sq*w1sq
     den += m1*d1sq 
-    if ip0['KL'] is not None and ip0['KR']is not None:
-        if ip1['KL'] is not None and ip1['KR']is not None:
-            K1 = (ip1['KL'] + ip1['KR'])/2 - ip1['B']
-            K0 = (ip0['KL'] + ip0['KR'])/2 - ip0['B']
-            d3sq = K1.dot(K1)
-            w3sq = (get_angle(K0, K1)/t)**2
-            energy += m3*d3sq*w3sq
-            den += m3*d3sq
 
     energy = energy/(2*den)
     # energy = energy/2
