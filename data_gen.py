@@ -194,7 +194,7 @@ def extract(sub_start, sub_end, csv_name):
     for sub in range(sub_start, sub_end):
         print(sub)
         t0 = time.time()
-        for act in range(11, 12):
+        for act in range(1, 12):
 
             # print(act)
             trials = joblib.load(f'cocokps/act{act}sub{sub}.kps')
@@ -225,7 +225,6 @@ def extract(sub_start, sub_end, csv_name):
                 for i in range(zero, 1000 - len(trial) + 1):
                     ip_set[i] = ip_set[1000 - len(trial) + 1]
 
-                prevprev = {feat: 0 for feat in FEATURE_LIST}
                 last = len(ip_set)
                 if act == 7:
                     last -= 3*(len(ip_set) - zero)//4
@@ -233,29 +232,32 @@ def extract(sub_start, sub_end, csv_name):
                     last -= 2*(len(ip_set) - zero)//3
                 elif act == 10:
                     last -= (len(ip_set) - zero)//2
+
+                prevprev = {feat: 0 for feat in FEATURE_LIST}
                 for i in range(zero+1+DEFAULT_CONSEC_FRAMES, last):
                     row = []
                     prev = {feat: prevprev[feat] for feat in FEATURE_LIST}
 
-                    # if act == 11 and ip_set[i] is not None:
-                    #     for feat in FEATURE_LIST:
-                    #         row += [ip_set[i]["features"][feat] if feat in ip_set[i]["features"] else 0]*DEFAULT_CONSEC_FRAMES
-                    #     row.append(11)
-                    #     final_data.append(row)
-                    #     continue
+                    if act == 11:
+                        if ip_set[i] is not None:
+                            for feat in FEATURE_LIST:
+                                row += [ip_set[i]["features"][feat] if feat in ip_set[i]["features"] else 0]*DEFAULT_CONSEC_FRAMES
+                            row.append(act)
+                            final_data.append(row)
+                        continue
 
                     for feat in FEATURE_LIST:
                         for frame in ip_set[i-DEFAULT_CONSEC_FRAMES:i]:
                             if (frame is not None and (feat in frame["features"])):
                                 prev[feat] = frame["features"][feat]
                             row.append(prev[feat])
-                            prev[feat]["re"] = 0
-                            prev[feat]["ratio_derivative"] = 0
+                            if feat in ["re", "ratio_derivative"]:
+                                prev[feat] = 0
                         if (ip_set[i-DEFAULT_CONSEC_FRAMES] is not None and (feat in ip_set[i-DEFAULT_CONSEC_FRAMES]["features"])):
                             prevprev[feat] = ip_set[i-DEFAULT_CONSEC_FRAMES]["features"][feat]
+                    prevprev["re"] = 0
+                    prevprev["ratio_derivative"] = 0
 
-                        # row += [frame["features"][feat]
-                        #         if (frame is not None and (feat in frame["features"])) else 0 for frame in ip_set[i-DEFAULT_CONSEC_FRAMES: i]]
                     row.append(int(df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"]))
                     if act in [1, 2, 3, 4, 5, 9]:
                         df_start = max(0, i-zero-2*DEFAULT_CONSEC_FRAMES+1)
@@ -265,9 +267,9 @@ def extract(sub_start, sub_end, csv_name):
                             if int(df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"]) == 11:
                                 print(sub, act, trial_num, i-zero-1)
                     else:
-                        # if i > zero+1+2*DEFAULT_CONSEC_FRAMES and sum(ip is not None for ip in ip_set[i-DEFAULT_CONSEC_FRAMES:i]) > 3*DEFAULT_CONSEC_FRAMES//4:
-                        if int(df.iloc[i-zero-1]["Tag"]) == act:
-                            final_data.append(row)
+                        if i > zero+1+2*DEFAULT_CONSEC_FRAMES and sum(ip is not None for ip in ip_set[i-DEFAULT_CONSEC_FRAMES:i]) > 3*DEFAULT_CONSEC_FRAMES//4:
+                            if int(df.iloc[i-zero-1]["Tag"]) == act:
+                                final_data.append(row)
 
         print(time.time()-t0)
 
@@ -281,6 +283,6 @@ def extract(sub_start, sub_end, csv_name):
 
 
 if __name__ == '__main__':
-    extract(1, 18, 'act11')
-    # extract(14, 16, '2sec_multi_cv_data')
-    # extract(16, 18, '2sec_multi_test_data')
+    extract(1, 14, '2sec_multi_train_data')
+    extract(14, 16, '2sec_multi_cv_data')
+    extract(16, 18, '2sec_multi_test_data')
