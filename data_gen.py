@@ -251,12 +251,13 @@ def extract(sub_start, sub_end, csv_name):
                             if (frame is not None and (feat in frame["features"])):
                                 prev[feat] = frame["features"][feat]
                             row.append(prev[feat])
-                            if feat in ["re", "ratio_derivative"]:
+                            if feat in ["re", "ratio_derivative", "gf"]:
                                 prev[feat] = 0
                         if (ip_set[i-DEFAULT_CONSEC_FRAMES] is not None and (feat in ip_set[i-DEFAULT_CONSEC_FRAMES]["features"])):
                             prevprev[feat] = ip_set[i-DEFAULT_CONSEC_FRAMES]["features"][feat]
                     prevprev["re"] = 0
                     prevprev["ratio_derivative"] = 0
+                    prevprev["gf"] = 0
 
                     row.append(int(df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"]))
                     if act in [1, 2, 3, 4, 5, 9]:
@@ -274,7 +275,7 @@ def extract(sub_start, sub_end, csv_name):
         print(time.time()-t0)
 
     final_df = pd.DataFrame(final_data)
-    print(final_df[180].value_counts())
+    # print(final_df[180].value_counts())
     final_df.to_csv(f'dataset/{csv_name}.csv', index=False, header=False)
 
     # for feat in FEATURE_LIST:
