@@ -4,26 +4,29 @@ import base64
 import time
 import numpy as np
 import matplotlib.pyplot as plt
-from visual import write_on_image, visualise, activity_dict,visualise_tracking
+from visual import write_on_image, visualise, activity_dict, visualise_tracking
 from processor import Processor
 from helpers import pop_and_add, last_ip, dist, move_figure
 from default_params import *
 from inv_pendulum import *
 import re
 import pandas as pd
+from livetest import LSTMModel
+import torch
 
 
-def show_tracked_img(img_dict,ip_set,num_matched):
+def show_tracked_img(img_dict, ip_set, num_matched):
     img = img_dict["img"]
     tagged_df = img_dict["tagged_df"]
-    keypoints_frame = [ person[-1] for person in ip_set ]
+    keypoints_frame = [person[-1] for person in ip_set]
     img = visualise_tracking(img=img, keypoint_sets=keypoints_frame, width=img_dict["width"], height=img_dict["height"],
-                    num_matched=num_matched,vis_keypoints=img_dict["vis_keypoints"],vis_skeleton=img_dict["vis_skeleton"], 
-                    CocoPointsOn=False)
+                             num_matched=num_matched, vis_keypoints=img_dict["vis_keypoints"], vis_skeleton=img_dict["vis_skeleton"],
+                             CocoPointsOn=False)
 
     img = write_on_image(img=img, text=tagged_df["text"],
-                              color=tagged_df["color"])
+                         color=tagged_df["color"])
     return img
+
 
 def get_source(args, i):
     tagged_df = None
@@ -151,46 +154,45 @@ def extract_keypoints_sequential(queue1, queue2, args1, args2, consecutive_frame
     print(f"Frames in {max_time}secs: {frame}")
     return
 
-def remove_wrongly_matched(matched_1,matched_2):
+
+def remove_wrongly_matched(matched_1, matched_2):
 
     unmatched_idxs = []
     i = 0
 
-    for ip1,ip2 in zip(matched_1,matched_2):
-        #each of these is a set of the last t framses of each matched person
-        correlation = cv2.compareHist(last_valid_hist(ip1)["up_hist"],last_valid_hist(ip2)["up_hist"],cv2.HISTCMP_CORREL)
+    for ip1, ip2 in zip(matched_1, matched_2):
+        # each of these is a set of the last t framses of each matched person
+        correlation = cv2.compareHist(last_valid_hist(ip1)["up_hist"], last_valid_hist(ip2)["up_hist"], cv2.HISTCMP_CORREL)
         if correlation < 0.5*HIST_THRESH:
             unmatched_idxs.append(i)
         i += 1
 
     return unmatched_idxs
 
-def match_unmatched(unmatched_1,unmatched_2,num_matched):
 
+def match_unmatched(unmatched_1, unmatched_2, num_matched):
 
     new_matched_1 = []
     new_matched_2 = []
-    final_pairs = [[],[]]
+    final_pairs = [[], []]
 
     if not unmatched_1 or not unmatched_2:
-        return final_pairs,new_matched_1,new_matched_2
+        return final_pairs, new_matched_1, new_matched_2
 
     new_matched = 0
-    correlation_matrix = - np.ones((len(unmatched_1),len(unmatched_2)))
-    dist_matrix = np.zeros((len(unmatched_1),len(unmatched_2)))
+    correlation_matrix = - np.ones((len(unmatched_1), len(unmatched_2)))
+    dist_matrix = np.zeros((len(unmatched_1), len(unmatched_2)))
     for i in range(len(unmatched_1)):
         for j in range(len(unmatched_2)):
-            correlation_matrix[i][j] = cv2.compareHist(last_valid_hist(unmatched_1[i])["up_hist"],last_valid_hist(unmatched_2[j])["up_hist"],cv2.HISTCMP_CORREL)
+            correlation_matrix[i][j] = cv2.compareHist(last_valid_hist(unmatched_1[i])["up_hist"],
+                                                       last_valid_hist(unmatched_2[j])["up_hist"], cv2.HISTCMP_CORREL)
             dist_matrix[i][j] = np.sum(np.absolute(last_valid_hist(unmatched_1[i])["up_hist"]-last_valid_hist(unmatched_2[j])["up_hist"]))
 
-
-
-
-    freelist_1 = [ i for i in range(len(unmatched_1))]
+    freelist_1 = [i for i in range(len(unmatched_1))]
     pair_21 = [-1]*len(unmatched_2)
-    unmatched_1_preferences = np.argsort(-correlation_matrix,axis=1)
-    print("cor",correlation_matrix,sep="\n")
-    print("unmatched_1",unmatched_1_preferences,sep="\n")
+    unmatched_1_preferences = np.argsort(-correlation_matrix, axis=1)
+    print("cor", correlation_matrix, sep="\n")
+    print("unmatched_1", unmatched_1_preferences, sep="\n")
     unmatched_indexes1 = [0]*len(unmatched_1)
     finish_array = [False]*len(unmatched_1)
     while freelist_1:
@@ -209,29 +211,30 @@ def match_unmatched(unmatched_1,unmatched_2,num_matched):
                 freelist_1.pop()
                 if not finish_array[curr_paired_2]:
                     freelist_1.append(curr_paired_2)
-            
+
         unmatched_indexes1[um1_idx] += 1
         if unmatched_indexes1[um1_idx] == len(unmatched_2):
             finish_array[um1_idx] = True
 
-    for j,i in enumerate(pair_21):
+    for j, i in enumerate(pair_21):
         if correlation_matrix[i][j] > HIST_THRESH:
             final_pairs[0].append(i+num_matched)
             final_pairs[1].append(j+num_matched)
             new_matched_1.append(unmatched_1[i])
             new_matched_2.append(unmatched_2[j])
 
+    print("finalpairs", final_pairs, sep="\n")
+
+    return final_pairs, new_matched_1, new_matched_2
 
 
-    print("finalpairs",final_pairs,sep="\n")
-
-    return final_pairs,new_matched_1,new_matched_2
-def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q1=None, feature_q2=None):
+def alg2_sequential(queue1, queue2, args1, args2, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q1=None, feature_q2=None):
+    model = LSTMModel(h_RNN=32, h_RNN_layers=2, drop_p=0.2, num_classes=7)
+    model.load_state_dict(torch.load('lstm.sav'))
+    model.eval()
     t0 = time.time()
-    re_matrix1, re_matrix2 = [], []
-    gf_matrix1, gf_matrix2 = [], []
-    feature_plotter1 = [[],[],[],[],[],[]]
-    feature_plotter2 = [[],[],[],[],[],[]]
+    feature_plotter1 = [[], [], [], [], [], []]
+    feature_plotter2 = [[], [], [], [], [], []]
     ip_set1, ip_set2 = [], []
     max_length_mat = 300
     num_matched = 0
@@ -256,28 +259,27 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
                 break
             kp_frame1 = dict_frame1["keypoint_sets"]
             kp_frame2 = dict_frame2["keypoint_sets"]
-            num_matched,new_num,indxs_unmatched1 = match_ip(ip_set1, kp_frame1, num_matched , max_length_mat)
-            assert(new_num==len(ip_set1))
-            for i in sorted(indxs_unmatched1,reverse=True):
+            num_matched, new_num, indxs_unmatched1 = match_ip(ip_set1, kp_frame1, num_matched, max_length_mat)
+            assert(new_num == len(ip_set1))
+            for i in sorted(indxs_unmatched1, reverse=True):
                 elem = ip_set2[i]
                 ip_set2.pop(i)
                 ip_set2.append(elem)
-            num_matched,new_num,indxs_unmatched2 = match_ip(ip_set2, kp_frame2, num_matched , max_length_mat)
+            num_matched, new_num, indxs_unmatched2 = match_ip(ip_set2, kp_frame2, num_matched, max_length_mat)
 
-            for i in sorted(indxs_unmatched2,reverse=True):
+            for i in sorted(indxs_unmatched2, reverse=True):
                 elem = ip_set1[i]
                 ip_set1.pop(i)
                 ip_set1.append(elem)
 
-
             matched_1 = ip_set1[:num_matched]
             matched_2 = ip_set2[:num_matched]
 
-            unmatch_previous = remove_wrongly_matched(matched_1,matched_2)
+            unmatch_previous = remove_wrongly_matched(matched_1, matched_2)
             if unmatch_previous:
                 print(unmatch_previous)
 
-            for i in sorted(unmatch_previous,reverse=True):
+            for i in sorted(unmatch_previous, reverse=True):
                 elem1 = ip_set1[i]
                 elem2 = ip_set2[i]
                 ip_set1.pop(i)
@@ -289,13 +291,13 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
             unmatched_1 = ip_set1[num_matched:]
             unmatched_2 = ip_set2[num_matched:]
 
-            new_pairs,new_matched1,new_matched2 = match_unmatched(unmatched_1,unmatched_2,num_matched)
+            new_pairs, new_matched1, new_matched2 = match_unmatched(unmatched_1, unmatched_2, num_matched)
 
             new_p1 = new_pairs[0]
             new_p2 = new_pairs[1]
-            for i in sorted(new_p1,reverse=True):
+            for i in sorted(new_p1, reverse=True):
                 ip_set1.pop(i)
-            for i in sorted(new_p2,reverse=True):
+            for i in sorted(new_p2, reverse=True):
                 ip_set2.pop(i)
 
             ip_set1 = ip_set1[:num_matched] + new_matched1 + ip_set1[num_matched:]
@@ -304,42 +306,35 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
 
             num_matched = num_matched + len(new_matched1)
 
-            img1 = show_tracked_img(dict_frame1,ip_set1,num_matched)
-            img2 = show_tracked_img(dict_frame2,ip_set2,num_matched)
-            #print(img1.shape)
+            img1 = show_tracked_img(dict_frame1, ip_set1, num_matched)
+            img2 = show_tracked_img(dict_frame2, ip_set2, num_matched)
+            # print(img1.shape)
             cv2.imshow(args1.video, img1)
             cv2.imshow(args2.video, img2)
 
             # get features now
 
-            valid1_idxs = get_all_features(ip_set1)
-            valid2_idxs = get_all_features(ip_set2)
+            valid1_idxs = get_all_features(ip_set1, model)
+            valid2_idxs = get_all_features(ip_set2, model)
             DEBUG = False
-            for ip_set,feature_plotter in zip([ip_set1,ip_set2],[feature_plotter1,feature_plotter2]):
+            for ip_set, feature_plotter in zip([ip_set1, ip_set2], [feature_plotter1, feature_plotter2]):
                 for cnt in range(len(FEATURE_LIST)):
                     plt_f = FEATURE_LIST[cnt]
                     if ip_set and ip_set[0] is not None and ip_set[0][-1] is not None and plt_f in ip_set[0][-1]["features"]:
-                        #print(ip_set[0][-1]["features"])
+                        # print(ip_set[0][-1]["features"])
                         feature_plotter[cnt].append(ip_set[0][-1]["features"][plt_f])
-                        if DEBUG and plt_f=="gf":
+                        if DEBUG and plt_f == "gf":
                             print(ip_set[-1][-1]["features"][plt_f])
                             pass
 
                     else:
-                        #print("None")
+                        # print("None")
                         feature_plotter[cnt].append(0)
                 DEBUG = True
 
     cv2.destroyAllWindows()
 
-    if feature_q1 is not None:
-        feature_q1.put(re_matrix1)
-        feature_q1.put(gf_matrix1)
-    if feature_q2 is not None:
-        feature_q2.put(re_matrix2)
-        feature_q2.put(gf_matrix2) 
-
-    for i,feature_arr in enumerate(feature_plotter1):
+    for i, feature_arr in enumerate(feature_plotter1):
         plt.clf()
         x = np.linspace(1, len(feature_arr), len(feature_arr))
         axes = plt.gca()
@@ -348,7 +343,7 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
         plt.savefig(f'{args1.video}_{FEATURE_LIST[i]}.png')
         plt.pause(1e-7)
 
-    for i,feature_arr in enumerate(feature_plotter2):
+    for i, feature_arr in enumerate(feature_plotter2):
         plt.clf()
         x = np.linspace(1, len(feature_arr), len(feature_arr))
         axes = plt.gca()
@@ -356,54 +351,72 @@ def alg2_sequential(queue1, queue2, args1,args2, consecutive_frames=DEFAULT_CONS
         plt.ylabel(FEATURE_LIST[i])
         plt.savefig(f'{args2.video}_{FEATURE_LIST[i]}.png')
         plt.pause(1e-7)
-            # if len(re_matrix1[0]) > 0:
-            #     print(np.linalg.norm(ip_set1[0][-1][0]['B']-ip_set1[0][-1][0]['H']))
-
+        # if len(re_matrix1[0]) > 0:
+        #     print(np.linalg.norm(ip_set1[0][-1][0]['B']-ip_set1[0][-1][0]['H']))
 
     print("P2 Over")
     return
 
-def get_all_features(ip_set):
+
+def get_all_features(ip_set, model):
     valid_idxs = []
     invalid_idxs = []
 
-    for i,ips in enumerate(ip_set):
+    for i, ips in enumerate(ip_set):
         # ip set for a particular person
-        if ips[-1] is None:
-            invalid_idxs.append(i)
-            continue
-        ips[-1]["features"] = {}
-        # get re, gf, angle, bounding box ratio, ratio derivative
         last1 = None
         last2 = None
-        for j in [-2,-3,-4,-5]:
+        for j in range(-2, -1*DEFAULT_CONSEC_FRAMES//4 - 1, -1):
             if ips[j] is not None:
                 if last1 is None:
                     last1 = j
                 elif last2 is None:
                     last2 = j
-
-        ips[-1]["features"]["ratio_bbox"] = FEATURE_SCALAR["ratio_bbox"]*get_ratio_bbox(ips[-1])
-
-        body_vector = ips[-1]["keypoints"]["N"] - ips[-1]["keypoints"]["B"]
-        ips[-1]["features"]["angle_vertical"] = FEATURE_SCALAR["angle_vertical"]*get_angle_vertical(body_vector)
-        ips[-1]["features"]["log_angle"] = FEATURE_SCALAR["log_angle"]*np.log(1 + np.abs(ips[-1]["features"]["angle_vertical"]))
-        
-
-        if last1 is None:
+        if ips[-1] is None:
             invalid_idxs.append(i)
-            continue
-        ips[-1]["features"]["re"] = FEATURE_SCALAR["re"]*get_rot_energy(ips[last1],ips[-1])
-        ips[-1]["features"]["ratio_derivative"] = FEATURE_SCALAR["ratio_derivative"]*get_ratio_derivative(ips[last1],ips[-1])
+            # continue
+        else:
+            ips[-1]["features"] = {}
+            # get re, gf, angle, bounding box ratio, ratio derivative
 
-        if last2 is None:
-            invalid_idxs.append(i)
-            continue
-        ips[-1]["features"]["gf"] = get_gf(ips[last2],ips[last1],ips[-1])
-        valid_idxs.append(i)
+            ips[-1]["features"]["ratio_bbox"] = FEATURE_SCALAR["ratio_bbox"]*get_ratio_bbox(ips[-1])
 
+            body_vector = ips[-1]["keypoints"]["N"] - ips[-1]["keypoints"]["B"]
+            ips[-1]["features"]["angle_vertical"] = FEATURE_SCALAR["angle_vertical"]*get_angle_vertical(body_vector)
+            ips[-1]["features"]["log_angle"] = FEATURE_SCALAR["log_angle"]*np.log(1 + np.abs(ips[-1]["features"]["angle_vertical"]))
 
-    return valid_idxs
+            if last1 is None:
+                invalid_idxs.append(i)
+                # continue
+            else:
+                ips[-1]["features"]["re"] = FEATURE_SCALAR["re"]*get_rot_energy(ips[last1], ips[-1])
+                ips[-1]["features"]["ratio_derivative"] = FEATURE_SCALAR["ratio_derivative"]*get_ratio_derivative(ips[last1], ips[-1])
+
+                if last2 is None:
+                    invalid_idxs.append(i)
+                    # continue
+                else:
+                    ips[-1]["features"]["gf"] = get_gf(ips[last2], ips[last1], ips[-1])
+                    valid_idxs.append(i)
+
+        xdata = []
+        if ips[-1] is None:
+            for feat in FEATURE_LIST[:FRAME_FEATURES]:
+                xdata.append(ip_set[last1]["features"][feat])
+            xdata += [0]*(len(FEATURE_LIST)-FRAME_FEATURES)
+        else:
+            for feat in FEATURE_LIST:
+                if feat in ip_set[-1]["features"]:
+                    xdata.append(ip_set[-1]["features"][feat])
+                else:
+                    xdata.append(0)
+
+        xdata = torch.Tensor(xdata.reshape(-1, 1, 5))
+        # what is ips[-2] is none
+        outputs, ips[-1]["h_s"] = model(xdata, ips[-2]["h_s"])
+        prediction = torch.max(outputs.data, 1)[1][0]
+
+    return valid_idxs, prediction
 
 
 def get_frame_features(ip_set, new_frame, re_matrix, gf_matrix, num_matched, max_length_mat=DEFAULT_CONSEC_FRAMES):
