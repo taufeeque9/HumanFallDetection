@@ -57,11 +57,11 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
     frame = 0
     fps = 0
     t0 = time.time()
-    #cv2.namedWindow(args.video)
+    # cv2.namedWindow(args.video)
     max_time = 1000
     while time.time() - t0 < max_time:
         # print(args.video,self_counter.value,other_counter.value,sep=" ")
-        if(self_counter.value > other_counter.value):
+        if args.num_cams == 2 and (self_counter.value > other_counter.value):
             continue
 
         ret_val, img = cam.read()
@@ -83,9 +83,8 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
         #     queue.put(None)
         #     break
 
-
         img = cv2.resize(img, (width, height))
-        hsv_img = cv2.cvtColor(img,cv2.COLOR_BGR2HSV)
+        hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         keypoint_sets, bb_list, width_height = processor_singleton.single_image(img)
         assert bb_list is None or (type(bb_list) == list)
         if bb_list:
@@ -101,17 +100,18 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
                        for ann in anns]
             lbboxes = [(np.asarray([width, height])*np.asarray(ann[2])).astype('int32')
                        for ann in anns]
-            bbox_list = [(np.asarray([width,height])*np.asarray(box)).astype('int32') for box in bb_list]
+            bbox_list = [(np.asarray([width, height])*np.asarray(box)).astype('int32') for box in bb_list]
             uhist_list = [get_hist(hsv_img, bbox) for bbox in ubboxes]
             lhist_list = [get_hist(img, bbox) for bbox in lbboxes]
-            keypoint_sets = [{"keypoints":keyp[0],"up_hist":uh,"lo_hist":lh,"time":curr_time,"box":box} for keyp,uh,lh,box in zip(anns,uhist_list,lhist_list,bbox_list)]
-            
+            keypoint_sets = [{"keypoints": keyp[0], "up_hist":uh, "lo_hist":lh, "time":curr_time, "box":box}
+                             for keyp, uh, lh, box in zip(anns, uhist_list, lhist_list, bbox_list)]
+
             cv2.polylines(img, ubboxes, True, (255, 0, 0), 2)
             cv2.polylines(img, lbboxes, True, (0, 255, 0), 2)
             for box in bbox_list:
-                cv2.rectangle(img,tuple(box[0]),tuple(box[1]),((0, 0, 255)),2)
+                cv2.rectangle(img, tuple(box[0]), tuple(box[1]), ((0, 0, 255)), 2)
 
-        #img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
+        # img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
         #                vis_skeleton=args.skeleton, CocoPointsOn=args.coco_points)
 
         # if tagged_df is None:
@@ -122,28 +122,27 @@ def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecu
         #                          text=f"Avg FPS: {frame//(time.time()-t0)}, Frame: {frame}, Tag: {activity_dict[tagged_df.iloc[frame-1]['Tag']]}",
         #                          color=[0, 0, 0])
 
-        if output_video is None:
-            if args.save_output:
-                output_video = cv2.VideoWriter(filename=args.out_path, fourcc=cv2.VideoWriter_fourcc(*'MP42'),
-                                               fps=args.fps, frameSize=img.shape[:2][::-1])
-                logging.debug(
-                    f'Saving the output video at {args.out_path} with {args.fps} frames per seconds')
-            else:
-                output_video = None
-                logging.debug(f'Not saving the output video')
-        else:
-            output_video.write(img)
-        dict_vis = {"img":img,"keypoint_sets":keypoint_sets,"width":width,"height":height,"vis_keypoints":args.joints,
-                    "vis_skeleton":args.skeleton,"CocoPointsOn":args.coco_points,
-                    "tagged_df":{"text":f"Avg FPS: {frame//(time.time()-t0)}, Frame: {frame}","color":[0,0,0]}}        
+        # if output_video is None:
+        #     if args.save_output:
+        #         output_video = cv2.VideoWriter(filename=args.out_path, fourcc=cv2.VideoWriter_fourcc(*'MP42'),
+        #                                        fps=args.fps, frameSize=img.shape[:2][::-1])
+        #         logging.debug(
+        #             f'Saving the output video at {args.out_path} with {args.fps} frames per seconds')
+        #     else:
+        #         output_video = None
+        #         logging.debug(f'Not saving the output video')
+        # else:
+        #     output_video.write(img)
+        dict_vis = {"img": img, "keypoint_sets": keypoint_sets, "width": width, "height": height, "vis_keypoints": args.joints,
+                    "vis_skeleton": args.skeleton, "CocoPointsOn": args.coco_points,
+                    "tagged_df": {"text": f"Avg FPS: {frame//(time.time()-t0)}, Frame: {frame}", "color": [0, 0, 0]}}
         queue.put(dict_vis)
         #cv2.imshow(args.video, img)
 
-        
     print(f"Frames in {max_time}secs: {frame}")
-    #cv2.destroyWindow(args.video)
+    # cv2.destroyWindow(args.video)
     queue.put(None)
-    
+
     return
 
 

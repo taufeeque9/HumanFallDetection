@@ -43,6 +43,9 @@ class FallDetector:
                                   'Example WIDTHxHEIGHT.'))
         parser.add_argument('--video', default=None, type=str,
                             help='Path to the video file.')
+        parser.add_argument('--num_cams', default=2, type=int,
+                            help='Number of Cameras.')
+
         parser.add_argument('--video_directory', default='dataset/Activity1/Subject1/1',
                             type=str, help='Diretory of video files')
         parser.add_argument('--debug', default=False, action='store_true',
@@ -146,35 +149,52 @@ class FallDetector:
         return
 
     def begin_mixed(self):
-        queue1 = mp.Queue()
-        queue2 = mp.Queue()
-        feature_q_1 = mp.Queue()
-        feature_q_2 = mp.Queue()
+        queues = [mp.Queue() for _ in range(self.args.num_cams)]
+        # queue1 = mp.Queue()
+        # queue2 = mp.Queue()
         counter1 = mp.Value('i', 0)
         counter2 = mp.Value('i', 0)
-        args1 = copy.deepcopy(self.args)
-        args2 = copy.deepcopy(self.args)
-        i = self.args.video_directory[-1]
-        args1.video = os.path.join(self.args.video_directory[:-1], "Trial"+i+"Cam1.mp4")
-        args2.video = os.path.join(self.args.video_directory[:-1], "Trial"+i+"Cam2.mp4")
-        process1_1 = mp.Process(target=extract_keypoints_parallel,
-                                args=(queue1, args1, counter1, counter2, self.consecutive_frames))
-        process1_2 = mp.Process(target=extract_keypoints_parallel,
-                                args=(queue2, args2, counter2, counter1, self.consecutive_frames))
-        process1_1.start()
-        process1_2.start()
-        if self.args.coco_points:
+        argss = [copy.deepcopy(self.args) for _ in range(self.args.num_cams)]
+        # args1 = copy.deepcopy(self.args)
+        # args2 = copy.deepcopy(self.args)
+        if self.args.num_cams == 1:
+            process1 = mp.Process(target=extract_keypoints_parallel,
+                                  args=(queues[0], argss[0], counter1, counter2, self.consecutive_frames))
+            process1.start()
+            if self.args.coco_points:
+                process1.join()
+            else:
+                process2 = mp.Process(target=alg2_sequential, args=(queues, argss,
+                                                                    self.consecutive_frames))
+                process2.start()
+        else:
+            i = self.args.video_directory[-1]
+            argss[0].video = os.path.join(self.args.video_directory[:-1], "Trial"+i+"Cam1.mp4")
+            argss[1].video = os.path.join(self.args.video_directory[:-1], "Trial"+i+"Cam2.mp4")
+            process1_1 = mp.Process(target=extract_keypoints_parallel,
+                                    args=(queues[0], argss[0], counter1, counter2, self.consecutive_frames))
+            process1_2 = mp.Process(target=extract_keypoints_parallel,
+                                    args=(queues[1], argss[1], counter2, counter1, self.consecutive_frames))
+            process1_1.start()
+            process1_2.start()
+            if self.args.coco_points:
+                process1_1.join()
+                process1_2.join()
+            else:
+                process2 = mp.Process(target=alg2_sequential, args=(queues, argss,
+                                                                    self.consecutive_frames))
+                process2.start()
+
+        if self.args.num_cams == 1:
+            process1.join()
+        else:
             process1_1.join()
             process1_2.join()
-        process2 = mp.Process(target=alg2_sequential, args=(queue1, queue2, args1, args2,
-                                                            self.consecutive_frames, feature_q_1, feature_q_2))
-        process2.start()
-        process1_1.join()
-        process1_2.join()
-        process2.join()
+        if not self.args.coco_points:
+            process2.join()
         print('over')
-        re1 = feature_q_1.get()
-        return re1, feature_q_1.get(), feature_q_2.get(), feature_q_2.get()
+
+        return
 
     def get_features(self):
         queue = mp.Queue()
@@ -206,4 +226,4 @@ if __name__ == "__main__":
     if f.args.sequential:
         f.begin_parallel()
     else:
-        re1, gf1, re2, gf2 = f.begin_mixed()
+        f.begin_mixed()

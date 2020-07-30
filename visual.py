@@ -39,8 +39,8 @@ SKELETON_CONNECTIONS_COCO = [(0, 1, (210, 182, 247)), (0, 2, (127, 127, 127)), (
 SKELETON_CONNECTIONS_5P = [('H', 'N', (210, 182, 247)), ('N', 'B', (210, 182, 247)), ('B', 'KL', (210, 182, 247)),
                            ('B', 'KR', (210, 182, 247)), ('KL', 'KR', (210, 182, 247))]
 
-COLOR_ARRAY = [(210, 182, 247),(127, 127, 127),(194, 119, 227),(199, 199, 199),(34, 189, 188),
-                (141, 219, 219),(207, 190, 23),(150, 152, 255),(189, 103, 148),(138, 223, 152)]
+COLOR_ARRAY = [(210, 182, 247), (127, 127, 127), (194, 119, 227), (199, 199, 199), (34, 189, 188),
+               (141, 219, 219), (207, 190, 23), (150, 152, 255), (189, 103, 148), (138, 223, 152)]
 
 UNMATCHED_COLOR = (180, 119, 31)
 activity_dict = {
@@ -48,7 +48,7 @@ activity_dict = {
     2.0: "Falling forward using knees",
     3: "Falling backwards",
     4: "Falling sideward",
-    5: "Falling sitting in empty chair",
+    5: "Falling",
     6: "Walking",
     7: "Standing",
     8: "Sitting",
@@ -112,8 +112,9 @@ def visualise(img: np.ndarray, keypoint_sets: List, width: int, height: int, vis
 
     return img
 
-def visualise_tracking(img: np.ndarray, keypoint_sets: List, width: int, height: int, num_matched: int,vis_keypoints: bool = False,
-              vis_skeleton: bool = False, CocoPointsOn: bool = False) -> np.ndarray:
+
+def visualise_tracking(img: np.ndarray, keypoint_sets: List, width: int, height: int, num_matched: int, vis_keypoints: bool = False,
+                       vis_skeleton: bool = False, CocoPointsOn: bool = False) -> np.ndarray:
     """Draw keypoints/skeleton on the output video frame."""
 
     if CocoPointsOn:
@@ -122,7 +123,7 @@ def visualise_tracking(img: np.ndarray, keypoint_sets: List, width: int, height:
         SKELETON_CONNECTIONS = SKELETON_CONNECTIONS_5P
 
     if vis_keypoints or vis_skeleton:
-        for i,keypoints in enumerate(keypoint_sets):
+        for i, keypoints in enumerate(keypoint_sets):
             if keypoints is None:
                 continue
             if not CocoPointsOn:
@@ -138,10 +139,9 @@ def visualise_tracking(img: np.ndarray, keypoint_sets: List, width: int, height:
                     if p1 == (0, 0) or p2 == (0, 0):
                         continue
                     if i < num_matched:
-                        color = COLOR_ARRAY[i%10]
+                        color = COLOR_ARRAY[i % 10]
                     else:
                         color = UNMATCHED_COLOR
-
 
                     cv2.line(img=img, pt1=p1, pt2=p2, color=color, thickness=3)
 

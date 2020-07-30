@@ -12,11 +12,11 @@ from inv_pendulum import *
 import re
 import pandas as pd
 from scipy.signal import savgol_filter, lfilter
-from livetest import LSTMModel
+from model import LSTMModel
 import torch
 
 
-def show_tracked_img(img_dict, ip_set, num_matched):
+def show_tracked_img(img_dict, ip_set, num_matched, output_video, args):
     img = img_dict["img"]
     tagged_df = img_dict["tagged_df"]
     keypoints_frame = [person[-1] for person in ip_set]
@@ -26,7 +26,22 @@ def show_tracked_img(img_dict, ip_set, num_matched):
 
     img = write_on_image(img=img, text=tagged_df["text"],
                          color=tagged_df["color"])
-    return img
+
+    if output_video is None:
+        # print(args.save_output)
+        if args.save_output:
+            vidname = args.video.split('/')
+            print(vidname)
+            output_video = cv2.VideoWriter(filename='/'.join(vidname[:-1])+'/out'+vidname[-1][:-3]+'avi', fourcc=cv2.VideoWriter_fourcc(*'MP42'),
+                                           fps=args.fps, frameSize=img.shape[:2][::-1])
+            logging.debug(
+                f'Saving the output video at {args.out_path} with {args.fps} frames per seconds')
+        else:
+            output_video = None
+            logging.debug(f'Not saving the output video')
+    else:
+        output_video.write(img)
+    return img, output_video
 
 
 def get_source(args, i):
@@ -233,162 +248,179 @@ def match_unmatched(unmatched_1, unmatched_2, lstm_set1, lstm_set2, num_matched)
     return final_pairs, new_matched_1, new_matched_2, new_lstm1, new_lstm2
 
 
-def alg2_sequential(queue1, queue2, args1, args2, consecutive_frames=DEFAULT_CONSEC_FRAMES, feature_q1=None, feature_q2=None):
+def alg2_sequential(queues, argss, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     model = LSTMModel(h_RNN=32, h_RNN_layers=2, drop_p=0.2, num_classes=7)
     model.load_state_dict(torch.load('lstm.sav'))
     model.eval()
+    output_videos = [None for _ in range(argss[0].num_cams)]
     t0 = time.time()
-    feature_plotter1 = [[], [], [], [], []]
-    feature_plotter2 = [[], [], [], [], []]
-    ip_set1, ip_set2 = [], []
-    lstm_set1, lstm_set2 = [], []
+    feature_plotters = [[[], [], [], [], []] for _ in range(argss[0].num_cams)]
+    # feature_plotter2 = [[], [], [], [], []]
+    ip_sets = [[] for _ in range(argss[0].num_cams)]
+    lstm_sets = [[] for _ in range(argss[0].num_cams)]
     max_length_mat = 300
     num_matched = 0
-    if not args1.plot_graph:
+    if not argss[0].plot_graph:
         max_length_mat = consecutive_frames
     else:
         f, ax = plt.subplots()
         move_figure(f, 800, 100)
 
-    cv2.namedWindow(args1.video)
-    cv2.namedWindow(args2.video)
+    # cv2.namedWindow(args1.video)
+    # cv2.namedWindow(args2.video)
+    [cv2.namedWindow(args.video) for args in argss]
     while True:
-        if not queue1.empty() and not queue2.empty():
-            dict_frame1 = queue1.get()
-            dict_frame2 = queue2.get()
-            if dict_frame1 is None or dict_frame2 is None:
+        # if not queue1.empty() and not queue2.empty():
+        if not any([q.empty() for q in queues]):
+            dict_frames = [q.get() for q in queues]
+            # dict_frame1 = queue1.get()
+            # dict_frame2 = queue2.get()
+            # if dict_frame1 is None or dict_frame2 is None:
+            if any([(dict_frame is None) for dict_frame in dict_frames]):
                 break
 
-            if cv2.waitKey(1) == 27 or cv2.getWindowProperty(args1.video, cv2.WND_PROP_VISIBLE) < 1:
+            if cv2.waitKey(1) == 27 or any(cv2.getWindowProperty(args.video, cv2.WND_PROP_VISIBLE) < 1 for args in argss):
                 break
-            if cv2.waitKey(1) == 27 or cv2.getWindowProperty(args2.video, cv2.WND_PROP_VISIBLE) < 1:
-                break
-            kp_frame1 = dict_frame1["keypoint_sets"]
-            kp_frame2 = dict_frame2["keypoint_sets"]
-            num_matched, new_num, indxs_unmatched1 = match_ip(ip_set1, kp_frame1, lstm_set1, num_matched, max_length_mat)
-            assert(new_num == len(ip_set1))
-            for i in sorted(indxs_unmatched1, reverse=True):
-                elem = ip_set2[i]
-                ip_set2.pop(i)
-                ip_set2.append(elem)
-                elem_lstm = lstm_set2[i]
-                lstm_set2.pop(i)
-                lstm_set2.append(elem_lstm)
-            num_matched, new_num, indxs_unmatched2 = match_ip(ip_set2, kp_frame2, lstm_set2, num_matched, max_length_mat)
+            # if cv2.waitKey(1) == 27 or cv2.getWindowProperty(args2.video, cv2.WND_PROP_VISIBLE) < 1:
+            #     break
+            kp_frames = [dict_frame["keypoint_sets"] for dict_frame in dict_frames]
+            if argss[0].num_cams == 1:
+                num_matched, new_num, indxs_unmatched = match_ip(ip_sets[0], kp_frames[0], lstm_sets[0], num_matched, max_length_mat)
+                valid1_idxs, prediction = get_all_features(ip_sets[0], lstm_sets[0], model)
+                dict_frames[0]["tagged_df"]["text"] += f" Pred: {activity_dict[prediction+5]}"
+                img, output_videos[0] = show_tracked_img(dict_frames[0], ip_sets[0], num_matched, output_videos[0], argss[0])
+                # print(img1.shape)
+                cv2.imshow(argss[0].video, img)
 
-            for i in sorted(indxs_unmatched2, reverse=True):
-                elem = ip_set1[i]
-                ip_set1.pop(i)
-                ip_set1.append(elem)
-                elem_lstm = lstm_set1[i]
-                lstm_set1.pop(i)
-                lstm_set1.append(elem_lstm)
+            elif argss[0].num_cams == 2:
+                # kp_frame1 = dict_frame1["keypoint_sets"]
+                # kp_frame2 = dict_frame2["keypoint_sets"]
+                num_matched, new_num, indxs_unmatched1 = match_ip(ip_sets[0], kp_frames[0], lstm_sets[0], num_matched, max_length_mat)
+                assert(new_num == len(ip_sets[0]))
+                for i in sorted(indxs_unmatched1, reverse=True):
+                    elem = ip_sets[1][i]
+                    ip_sets[1].pop(i)
+                    ip_sets[1].append(elem)
+                    elem_lstm = lstm_sets[1][i]
+                    lstm_sets[1].pop(i)
+                    lstm_sets[1].append(elem_lstm)
+                num_matched, new_num, indxs_unmatched2 = match_ip(ip_sets[1], kp_frames[1], lstm_sets[1], num_matched, max_length_mat)
 
-            matched_1 = ip_set1[:num_matched]
-            matched_2 = ip_set2[:num_matched]
+                for i in sorted(indxs_unmatched2, reverse=True):
+                    elem = ip_sets[0][i]
+                    ip_sets[0].pop(i)
+                    ip_sets[0].append(elem)
+                    elem_lstm = lstm_sets[0][i]
+                    lstm_sets[0].pop(i)
+                    lstm_sets[0].append(elem_lstm)
 
-            unmatch_previous = remove_wrongly_matched(matched_1, matched_2)
-            if unmatch_previous:
-                print(unmatch_previous)
+                matched_1 = ip_sets[0][:num_matched]
+                matched_2 = ip_sets[1][:num_matched]
 
-            for i in sorted(unmatch_previous, reverse=True):
-                elem1 = ip_set1[i]
-                elem2 = ip_set2[i]
-                ip_set1.pop(i)
-                ip_set2.pop(i)
-                ip_set1.append(elem1)
-                ip_set2.append(elem2)
-                elem_lstm1 = lstm_set1[i]
-                lstm_set1.pop(i)
-                lstm_set1.append(elem_lstm1)
-                elem_lstm2 = lstm_set2[i]
-                lstm_set2.pop(i)
-                lstm_set2.append(elem_lstm2)
-                num_matched -= 1
+                unmatch_previous = remove_wrongly_matched(matched_1, matched_2)
+                if unmatch_previous:
+                    print(unmatch_previous)
 
-            unmatched_1 = ip_set1[num_matched:]
-            unmatched_2 = ip_set2[num_matched:]
+                for i in sorted(unmatch_previous, reverse=True):
+                    elem1 = ip_sets[0][i]
+                    elem2 = ip_sets[1][i]
+                    ip_sets[0].pop(i)
+                    ip_sets[1].pop(i)
+                    ip_sets[0].append(elem1)
+                    ip_sets[1].append(elem2)
+                    elem_lstm1 = lstm_sets[0][i]
+                    lstm_sets[0].pop(i)
+                    lstm_sets[0].append(elem_lstm1)
+                    elem_lstm2 = lstm_sets[1][i]
+                    lstm_sets[1].pop(i)
+                    lstm_sets[1].append(elem_lstm2)
+                    num_matched -= 1
 
-            new_pairs, new_matched1, new_matched2, new_lstm1, new_lstm2 = match_unmatched(
-                unmatched_1, unmatched_2, lstm_set1, lstm_set2, num_matched)
+                unmatched_1 = ip_sets[0][num_matched:]
+                unmatched_2 = ip_sets[1][num_matched:]
 
-            new_p1 = new_pairs[0]
-            new_p2 = new_pairs[1]
+                new_pairs, new_matched1, new_matched2, new_lstm1, new_lstm2 = match_unmatched(
+                    unmatched_1, unmatched_2, lstm_sets[0], lstm_sets[1], num_matched)
 
-            for i in sorted(new_p1, reverse=True):
-                ip_set1.pop(i)
-                lstm_set1.pop(i)
-            for i in sorted(new_p2, reverse=True):
-                ip_set2.pop(i)
-                lstm_set2.pop(i)
+                new_p1 = new_pairs[0]
+                new_p2 = new_pairs[1]
 
-            ip_set1 = ip_set1[:num_matched] + new_matched1 + ip_set1[num_matched:]
-            ip_set2 = ip_set2[:num_matched] + new_matched2 + ip_set2[num_matched:]
-            lstm_set1 = lstm_set1[:num_matched] + new_lstm1 + lstm_set1[num_matched:]
-            lstm_set2 = lstm_set2[:num_matched] + new_lstm2 + lstm_set2[num_matched:]
-            # remember to match the energy matrices also
+                for i in sorted(new_p1, reverse=True):
+                    ip_sets[0].pop(i)
+                    lstm_sets[0].pop(i)
+                for i in sorted(new_p2, reverse=True):
+                    ip_sets[1].pop(i)
+                    lstm_sets[1].pop(i)
 
-            num_matched = num_matched + len(new_matched1)
+                ip_sets[0] = ip_sets[0][:num_matched] + new_matched1 + ip_sets[0][num_matched:]
+                ip_sets[1] = ip_sets[1][:num_matched] + new_matched2 + ip_sets[1][num_matched:]
+                lstm_sets[0] = lstm_sets[0][:num_matched] + new_lstm1 + lstm_sets[0][num_matched:]
+                lstm_sets[1] = lstm_sets[1][:num_matched] + new_lstm2 + lstm_sets[1][num_matched:]
+                # remember to match the energy matrices also
 
-            # get features now
+                num_matched = num_matched + len(new_matched1)
 
-            valid1_idxs, prediction1 = get_all_features(ip_set1, lstm_set1, model)
-            valid2_idxs, prediction2 = get_all_features(ip_set2, lstm_set2, model)
-            dict_frame1["tagged_df"]["text"] += f"Pred: {activity_dict[prediction1+5]}"
-            dict_frame2["tagged_df"]["text"] += f"Pred: {activity_dict[prediction2+5]}"
-            img1 = show_tracked_img(dict_frame1, ip_set1, num_matched)
-            img2 = show_tracked_img(dict_frame2, ip_set2, num_matched)
-            # print(img1.shape)
-            cv2.imshow(args1.video, img1)
-            cv2.imshow(args2.video, img2)
+                # get features now
 
-            assert(len(lstm_set1) == len(ip_set1))
-            assert(len(lstm_set2) == len(ip_set2))
+                valid1_idxs, prediction1 = get_all_features(ip_sets[0], lstm_sets[0], model)
+                valid2_idxs, prediction2 = get_all_features(ip_sets[1], lstm_sets[1], model)
+                dict_frames[0]["tagged_df"]["text"] += f" Pred: {activity_dict[prediction1+5]}"
+                dict_frames[1]["tagged_df"]["text"] += f" Pred: {activity_dict[prediction2+5]}"
+                img1, output_videos[0] = show_tracked_img(dict_frames[0], ip_sets[0], num_matched, output_videos[0], argss[0])
+                img2, output_videos[1] = show_tracked_img(dict_frames[1], ip_sets[1], num_matched, output_videos[1], argss[1])
+                # print(img1.shape)
+                cv2.imshow(argss[0].video, img1)
+                cv2.imshow(argss[1].video, img2)
+
+                assert(len(lstm_sets[0]) == len(ip_sets[0]))
+                assert(len(lstm_sets[1]) == len(ip_sets[1]))
 
             DEBUG = False
-            for ip_set, feature_plotter in zip([ip_set1, ip_set2], [feature_plotter1, feature_plotter2]):
-                for cnt in range(len(FEATURE_LIST)):
-                    plt_f = FEATURE_LIST[cnt]
-                    if ip_set and ip_set[0] is not None and ip_set[0][-1] is not None and plt_f in ip_set[0][-1]["features"]:
-                        # print(ip_set[0][-1]["features"])
-                        feature_plotter[cnt].append(ip_set[0][-1]["features"][plt_f])
+            # for ip_set, feature_plotter in zip(ip_sets, feature_plotters):
+            #     for cnt in range(len(FEATURE_LIST)):
+            #         plt_f = FEATURE_LIST[cnt]
+            #         if ip_set and ip_set[0] is not None and ip_set[0][-1] is not None and plt_f in ip_set[0][-1]["features"]:
+            #             # print(ip_set[0][-1]["features"])
+            #             feature_plotter[cnt].append(ip_set[0][-1]["features"][plt_f])
+            #
+            #         else:
+            #             # print("None")
+            #             feature_plotter[cnt].append(0)
+            DEBUG = True
 
-                    else:
-                        # print("None")
-                        feature_plotter[cnt].append(0)
-                DEBUG = True
+    # cv2.destroyAllWindows()
+    # for feature_plotter in feature_plotters:
+    #     for i, feature_arr in enumerate(feature_plotter):
+    #         plt.clf()
+    #         x = np.linspace(1, len(feature_arr), len(feature_arr))
+    #         axes = plt.gca()
+    #         filter_array = feature_arr
+    #         line, = axes.plot(x, filter_array, 'r-')
+    #         plt.ylabel(FEATURE_LIST[i])
+    #         # #plt.savefig(f'{args1.video}_{FEATURE_LIST[i]}_filter.png')
+    #         plt.pause(1e-7)
 
-    cv2.destroyAllWindows()
-
-    for i, feature_arr in enumerate(feature_plotter1):
-        plt.clf()
-        x = np.linspace(1, len(feature_arr), len(feature_arr))
-        axes = plt.gca()
-        filter_array = feature_arr
-        line, = axes.plot(x, filter_array, 'r-')
-        plt.ylabel(FEATURE_LIST[i])
-        # #plt.savefig(f'{args1.video}_{FEATURE_LIST[i]}_filter.png')
-        plt.pause(1e-7)
-
-    for i, feature_arr in enumerate(feature_plotter2):
-        plt.clf()
-        x = np.linspace(1, len(feature_arr), len(feature_arr))
-        axes = plt.gca()
-        filter_array = feature_arr
-        line, = axes.plot(x, filter_array, 'r-')
-        plt.ylabel(FEATURE_LIST[i])
-        # plt.savefig(f'{args2.video}_{FEATURE_LIST[i]}_filter.png')
-        plt.pause(1e-7)
-        # if len(re_matrix1[0]) > 0:
-        #     print(np.linalg.norm(ip_set1[0][-1][0]['B']-ip_set1[0][-1][0]['H']))
+    # for i, feature_arr in enumerate(feature_plotter2):
+    #     plt.clf()
+    #     x = np.linspace(1, len(feature_arr), len(feature_arr))
+    #     axes = plt.gca()
+    #     filter_array = feature_arr
+    #     line, = axes.plot(x, filter_array, 'r-')
+    #     plt.ylabel(FEATURE_LIST[i])
+    #     # plt.savefig(f'{args2.video}_{FEATURE_LIST[i]}_filter.png')
+    #     plt.pause(1e-7)
+    #     # if len(re_matrix1[0]) > 0:
+    #     #     print(np.linalg.norm(ip_sets[0][0][-1][0]['B']-ip_sets[0][0][-1][0]['H']))
 
     print("P2 Over")
+    del model
     return
 
 
 def get_all_features(ip_set, lstm_set, model):
     valid_idxs = []
     invalid_idxs = []
+    prediction = 15
 
     for i, ips in enumerate(ip_set):
         # ip set for a particular person
@@ -442,7 +474,9 @@ def get_all_features(ip_set, lstm_set, model):
         xdata = torch.Tensor(xdata).view(-1, 1, 5)
         # what is ips[-2] is none
         outputs, lstm_set[i] = model(xdata, lstm_set[i])
-        prediction = torch.max(outputs.data, 1)[1][0].item()
+        if i == 0:
+            prediction = torch.max(outputs.data, 1)[1][0].item()
+        # break
 
     return valid_idxs, prediction
 

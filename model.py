@@ -1,5 +1,6 @@
 # import pandas as pd
 # from copy import deepcopy
+import pandas as pd
 import torch
 import torch.nn as nn
 # import torch.nn.functional as F
@@ -38,18 +39,20 @@ class LSTMModel(nn.Module):
         return out, h_s
 
 
-# model = LSTMModel(h_RNN=32, h_RNN_layers=2, drop_p=0.2, num_classes=7)
+# model = LSTMModel(h_RNN=16, h_RNN_layers=2, drop_p=0.2, num_classes=7)
 # model.load_state_dict(torch.load('lstm.sav'))
 # model.eval()
 # df = pd.read_csv('dataset/2sec_multi_train_data.csv', header=None)
 # sum = 0
 # h_s = None
-# for j in range(0, 10):
-#     xdata = df.iloc[j, 175:180].values.reshape((1, 5), order='F')
+# for j in range(0, 80):
+#     xdata = df.iloc[j, :180].values.reshape((36, 5), order='F')
 #     # print(xdata)
-#
+# #
 #     for i in range(1):
-#         xcurr = torch.Tensor(xdata.reshape(-1, 1, 5))
+#         xcurr = torch.Tensor(xdata.reshape(-1, 36, 5))
 #         outputs, h_s = model(xcurr, h_s)
 #         _, predicted = torch.max(outputs.data, 1)
 #         sum += (predicted.cpu().numpy()[0] == 0)
+#
+# print(sum)
