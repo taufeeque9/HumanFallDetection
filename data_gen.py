@@ -64,62 +64,10 @@ def alg2_sequential(queue1, plot_graph, consecutive_frames=DEFAULT_CONSEC_FRAMES
             #     break
             kp_frame1 = dict_frame1["keypoint_sets"]
             # kp_frame2 = dict_frame2["keypoint_sets"]
-            num_matched, new_num, indxs_unmatched1 = match_ip(ip_set1, kp_frame1, num_matched, max_length_mat)
+            num_matched, new_num, indxs_unmatched1 = match_ip(ip_set1, kp_frame1, [], num_matched, max_length_mat)
             # assert(new_num == len(ip_set1))
-            # for i in sorted(indxs_unmatched1, reverse=True):
-            #     elem = ip_set2[i]
-            #     ip_set2.pop(i)
-            #     ip_set2.append(elem)
-            # num_matched, new_num, indxs_unmatched2 = match_ip(ip_set2, kp_frame2, num_matched, max_length_mat)
 
-            # for i in sorted(indxs_unmatched2, reverse=True):
-            #     elem = ip_set1[i]
-            #     ip_set1.pop(i)
-            #     ip_set1.append(elem)
-            #
-            # matched_1 = ip_set1[:num_matched]
-            # matched_2 = ip_set2[:num_matched]
-            #
-            # unmatch_previous = remove_wrongly_matched(matched_1, matched_2)
-            # if unmatch_previous:
-            #     print(unmatch_previous)
-            #
-            # for i in sorted(unmatch_previous, reverse=True):
-            #     elem1 = ip_set1[i]
-            #     elem2 = ip_set2[i]
-            #     ip_set1.pop(i)
-            #     ip_set2.pop(i)
-            #     ip_set1.append(elem1)
-            #     ip_set2.append(elem2)
-            #     num_matched -= 1
-            #
-            # unmatched_1 = ip_set1[num_matched:]
-            # unmatched_2 = ip_set2[num_matched:]
-            #
-            # new_pairs, new_matched1, new_matched2 = match_unmatched(unmatched_1, unmatched_2, num_matched)
-            #
-            # new_p1 = new_pairs[0]
-            # new_p2 = new_pairs[1]
-            # for i in sorted(new_p1, reverse=True):
-            #     ip_set1.pop(i)
-            # for i in sorted(new_p2, reverse=True):
-            #     ip_set2.pop(i)
-            #
-            # ip_set1 = ip_set1[:num_matched] + new_matched1 + ip_set1[num_matched:]
-            # ip_set2 = ip_set2[:num_matched] + new_matched2 + ip_set2[num_matched:]
-            # # remember to match the energy matrices also
-            #
-            # num_matched = num_matched + len(new_matched1)
-            #
-            # img1 = show_tracked_img(dict_frame1, ip_set1, num_matched)
-            # img2 = show_tracked_img(dict_frame2, ip_set2, num_matched)
-            # # print(img1.shape)
-            # cv2.imshow(args1.video, img1)
-            # cv2.imshow(args2.video, img2)
-
-            # get features now
-
-            valid1_idxs = get_all_features(ip_set1)
+            valid1_idxs = get_all_features(ip_set1, [], [])
             # valid2_idxs = get_all_features(ip_set2)
             cnt = 0
             continue
@@ -202,9 +150,15 @@ def extract(sub_start, sub_end, csv_name):
                 df = tagged_df.query(
                     f'Subject == {sub} & Activity == {act} & Trial == {trial_num//2+1}')
 
-                if (act in [6, 7, 8, 10] and trial_num > 1) or (act == 11 and trial_num % 2 == 1):
+                if trial_num % 2 == 1:
                     continue
 
+                # if (act in [6, 7, 8, 10] and trial_num > 1) or (act != 8 and trial_num % 2 != 1):
+                #     continue
+                # if act == 8 and trial_num % 2 == 1:
+                #     continue
+                # if (act in [6, 7, 8, 10] and trial_num > 1):
+                #     continue
                 if act in [1, 2, 3, 4, 5, 9]:
                     for flip in [False, True]:
                         if flip:
@@ -213,64 +167,117 @@ def extract(sub_start, sub_end, csv_name):
                                     for i, (x, _, p) in enumerate(kp):
                                         kp[i][0] = 1 - x if p > 0 else x
                         f_q = alg1(trial, df)
+                        try:
+                            ip_set = f_q.get()[0]
+                        except:
+                            continue
+                        zero = 1000 - len(trial) + 1 - (DEFAULT_CONSEC_FRAMES - 1)
+                        zero = max(0, zero)
+                        for i in range(zero, 1000 - len(trial) + 1):
+                            ip_set[i] = ip_set[1000 - len(trial) + 1]
+
+                        last = len(ip_set)
+
+                        prevprev = {feat: 0 for feat in FEATURE_LIST}
+                        for i in range(zero+1+DEFAULT_CONSEC_FRAMES, last):
+                            row = []
+                            prev = {feat: prevprev[feat] for feat in FEATURE_LIST}
+
+                            for feat in FEATURE_LIST:
+                                for frame in ip_set[i+1-DEFAULT_CONSEC_FRAMES:i+1]:
+                                    if (frame is not None and (feat in frame["features"])):
+                                        prev[feat] = frame["features"][feat]
+                                    if feat != "angle_vertical":
+                                        row.append(prev[feat])
+                                    if feat in ["re", "ratio_derivative", "gf"]:
+                                        prev[feat] = 0
+                                if (ip_set[i+1-DEFAULT_CONSEC_FRAMES] is not None and (feat in ip_set[i+1-DEFAULT_CONSEC_FRAMES]["features"])):
+                                    prevprev[feat] = ip_set[i+1-DEFAULT_CONSEC_FRAMES]["features"][feat]
+                            prevprev["re"] = 0
+                            prevprev["ratio_derivative"] = 0
+                            prevprev["gf"] = 0
+
+                            row.append(int(df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"]))
+                            row.append(prev["angle_vertical"])
+                            if act in [1, 2, 3, 4, 5, 9]:
+                                df_start = max(0, i-zero-2*DEFAULT_CONSEC_FRAMES+1)
+                                df_quarter_end = min(i-zero-DEFAULT_CONSEC_FRAMES, df_start+DEFAULT_CONSEC_FRAMES//4)
+                                if df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"] == act and act not in df.iloc[df_start: df_quarter_end]["Tag"].values:
+                                    # for _ in range(3):
+                                    final_data.append(row)
+                                    if int(df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"]) == 11:
+                                        print(sub, act, trial_num, i-zero-1)
+                            else:
+                                if i > zero+1+2*DEFAULT_CONSEC_FRAMES and sum(ip is not None for ip in ip_set[i+1-DEFAULT_CONSEC_FRAMES:i+1]) > 3*DEFAULT_CONSEC_FRAMES//4:
+                                    if int(df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"]) == act:
+                                        final_data.append(row)
+
                 else:
                     f_q = alg1(trial, df)
-                try:
-                    ip_set = f_q.get()[0]
-                except:
-                    continue
-
-                zero = 1000 - len(trial) + 1 - (DEFAULT_CONSEC_FRAMES - 1)
-                zero = max(0, zero)
-                for i in range(zero, 1000 - len(trial) + 1):
-                    ip_set[i] = ip_set[1000 - len(trial) + 1]
-
-                last = len(ip_set)
-                if act == 7:
-                    last -= 3*(len(ip_set) - zero)//4
-                elif act in [6, 8]:
-                    last -= 2*(len(ip_set) - zero)//3
-                elif act == 10:
-                    last -= (len(ip_set) - zero)//2
-
-                prevprev = {feat: 0 for feat in FEATURE_LIST}
-                for i in range(zero+1+DEFAULT_CONSEC_FRAMES, last):
-                    row = []
-                    prev = {feat: prevprev[feat] for feat in FEATURE_LIST}
-
-                    if act == 11:
-                        if ip_set[i] is not None:
-                            for feat in FEATURE_LIST:
-                                row += [ip_set[i]["features"][feat] if feat in ip_set[i]["features"] else 0]*DEFAULT_CONSEC_FRAMES
-                            row.append(act)
-                            final_data.append(row)
+                    try:
+                        ip_set = f_q.get()[0]
+                    except:
                         continue
 
-                    for feat in FEATURE_LIST:
-                        for frame in ip_set[i-DEFAULT_CONSEC_FRAMES:i]:
-                            if (frame is not None and (feat in frame["features"])):
-                                prev[feat] = frame["features"][feat]
-                            row.append(prev[feat])
-                            if feat in ["re", "ratio_derivative", "gf"]:
-                                prev[feat] = 0
-                        if (ip_set[i-DEFAULT_CONSEC_FRAMES] is not None and (feat in ip_set[i-DEFAULT_CONSEC_FRAMES]["features"])):
-                            prevprev[feat] = ip_set[i-DEFAULT_CONSEC_FRAMES]["features"][feat]
-                    prevprev["re"] = 0
-                    prevprev["ratio_derivative"] = 0
-                    prevprev["gf"] = 0
+                    zero = 1000 - len(trial) + 1 - (DEFAULT_CONSEC_FRAMES - 1)
+                    zero = max(0, zero)
+                    for i in range(zero, 1000 - len(trial) + 1):
+                        ip_set[i] = ip_set[1000 - len(trial) + 1]
 
-                    row.append(int(df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"]))
-                    if act in [1, 2, 3, 4, 5, 9]:
-                        df_start = max(0, i-zero-2*DEFAULT_CONSEC_FRAMES+1)
-                        df_quarter_end = min(i-zero-DEFAULT_CONSEC_FRAMES, df_start+DEFAULT_CONSEC_FRAMES//4)
-                        if df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"] == act and act not in df.iloc[df_start: df_quarter_end]["Tag"].values:
-                            final_data.append(row)
-                            if int(df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"]) == 11:
-                                print(sub, act, trial_num, i-zero-1)
-                    else:
-                        if i > zero+1+2*DEFAULT_CONSEC_FRAMES and sum(ip is not None for ip in ip_set[i-DEFAULT_CONSEC_FRAMES:i]) > 3*DEFAULT_CONSEC_FRAMES//4:
-                            if int(df.iloc[i-zero-1]["Tag"]) == act:
+                    last = len(ip_set)
+                    # if act == 6:
+                    #     last -= (len(ip_set) - zero)//4
+                    # elif act == 7:
+                    #     last -= (len(ip_set) - zero)//3
+                    # elif act == 8:
+                    #     last -= 1*(len(ip_set) - zero)//3
+                    # elif act == 10:
+                    #     last -= (len(ip_set) - zero)//4
+
+                    prevprev = {feat: 0 for feat in FEATURE_LIST}
+                    for i in range(zero+1+DEFAULT_CONSEC_FRAMES, last):
+                        row = []
+                        prev = {feat: prevprev[feat] for feat in FEATURE_LIST}
+
+                        if act == 11:
+                            if ip_set[i] is not None:
+                                for feat in FEATURE_LIST:
+                                    if feat != "angle_vertical":
+                                        row += [ip_set[i]["features"][feat] if feat in ip_set[i]["features"] else 0]*DEFAULT_CONSEC_FRAMES
+                                row.append(act)
+                                row.append(ip_set[i]["features"]["angle_vertical"])
                                 final_data.append(row)
+                            continue
+
+                        for feat in FEATURE_LIST:
+                            for frame in ip_set[i+1-DEFAULT_CONSEC_FRAMES:i+1]:
+                                if (frame is not None and (feat in frame["features"])):
+                                    prev[feat] = frame["features"][feat]
+                                if feat != "angle_vertical":
+                                    row.append(prev[feat])
+                                if feat in ["re", "ratio_derivative", "gf"]:
+                                    prev[feat] = 0
+                            if (ip_set[i+1-DEFAULT_CONSEC_FRAMES] is not None and (feat in ip_set[i+1-DEFAULT_CONSEC_FRAMES]["features"])):
+                                prevprev[feat] = ip_set[i+1-DEFAULT_CONSEC_FRAMES]["features"][feat]
+                        prevprev["re"] = 0
+                        prevprev["ratio_derivative"] = 0
+                        prevprev["gf"] = 0
+
+                        row.append(int(df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"]))
+                        row.append(prev["angle_vertical"])
+                        if act in [1, 2, 3, 4, 5, 9]:
+                            df_start = max(0, i-zero-2*DEFAULT_CONSEC_FRAMES+1)
+                            df_quarter_end = min(i-zero-DEFAULT_CONSEC_FRAMES, df_start+DEFAULT_CONSEC_FRAMES//4)
+                            if df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"] == act and act not in df.iloc[df_start: df_quarter_end]["Tag"].values:
+                                # for _ in range(10):
+                                #     print(act)
+                                final_data.append(row)
+                                if int(df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"]) == 11:
+                                    print(sub, act, trial_num, i-zero-1)
+                        else:
+                            if i > zero+1+2*DEFAULT_CONSEC_FRAMES and sum(ip is not None for ip in ip_set[i+1-DEFAULT_CONSEC_FRAMES:i+1]) > 3*DEFAULT_CONSEC_FRAMES//4:
+                                if int(df.iloc[i-zero-DEFAULT_CONSEC_FRAMES]["Tag"]) == act:
+                                    final_data.append(row)
 
         print(time.time()-t0)
 
@@ -284,6 +291,6 @@ def extract(sub_start, sub_end, csv_name):
 
 
 if __name__ == '__main__':
-    extract(1, 14, '2sec_multi_train_data')
-    extract(14, 16, '2sec_multi_cv_data')
-    extract(16, 18, '2sec_multi_test_data')
+    extract(1, 18, '2sec_multi_train_data_c1_allf_os')
+    # extract(14, 16, '2sec_multi_cv_data_combined_allf_rbb')
+    # extract(16, 18, '2sec_multi_test_data_c1_lr')
