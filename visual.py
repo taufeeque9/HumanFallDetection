@@ -43,18 +43,34 @@ COLOR_ARRAY = [(210, 182, 247), (127, 127, 127), (194, 119, 227), (199, 199, 199
                (141, 219, 219), (207, 190, 23), (150, 152, 255), (189, 103, 148), (138, 223, 152)]
 
 UNMATCHED_COLOR = (180, 119, 31)
+# activity_dict = {
+#     1.0: "Falling forward using hands",
+#     2.0: "Falling forward using knees",
+#     3: "Falling backwards",
+#     4: "Falling sideward",
+#     5: "Falling",
+#     6: "Walking",
+#     7: "Standing",
+#     8: "Sitting",
+#     9: "Picking up an object",
+#     10: "Jumping",
+#     11: "Laying",
+#     12: "False Fall",
+#     20: "None"
+# }
 activity_dict = {
     1.0: "Falling forward using hands",
     2.0: "Falling forward using knees",
     3: "Falling backwards",
     4: "Falling sideward",
-    5: "Falling",
-    6: "Walking",
-    7: "Standing",
-    8: "Sitting",
-    9: "Picking up an object",
-    10: "Jumping",
-    11: "Laying",
+    5: "FALL",
+    6: "Normal",
+    7: "Normal",
+    8: "Normal",
+    9: "Normal",
+    10: "Normal",
+    11: "Normal",
+    12: "FALL Warning",
     20: "None"
 }
 

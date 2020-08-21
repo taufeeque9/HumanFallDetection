@@ -26,18 +26,16 @@ class LSTMModel(nn.Module):
         )
         self.fc1 = nn.Linear(self.h_RNN, self.num_classes)
 
-    def forward(self, x, h_s):
+    def forward(self, x, h_s=None):
         # print('forward started')
         self.LSTM.flatten_parameters()
         RNN_out, h_s = self.LSTM(x, h_s)
-        # h_s = (h_n, h_c)
         """ h_n shape (n_layers, batch, hidden_size), h_c shape (n_layers, batch, hidden_size) """
         """ None represents zero initial hidden state. RNN_out has shape=(batch, time_step, output_size) """
 
         # FC layers
         out = self.fc1(RNN_out[:, -1, :])   # choose RNN_out at the last time step
         return out, h_s
-
 
 # model = LSTMModel(h_RNN=16, h_RNN_layers=2, drop_p=0.2, num_classes=7)
 # model.load_state_dict(torch.load('lstm.sav'))

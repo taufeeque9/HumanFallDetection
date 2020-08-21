@@ -22,7 +22,7 @@ def match_ip(ip_set, new_ips, lstm_set, num_matched, consecutive_frames=DEFAULT_
 
         if cmin[1] == -1:
             ip_set.append([None for _ in range(consecutive_frames - 1)] + [new_ip])
-            lstm_set.append(None)  # Initial hidden state of lstm is None
+            lstm_set.append([None, 0, 0, 0])  # Initial hidden state of lstm is None
             new_len_ip_set += 1
 
         else:
@@ -269,6 +269,13 @@ def get_gf(ip0, ip1, ip2):
 
     # print("Energy: ", Q_RD1 + Q_RD2)
     return Q_RD1 + Q_RD2
+
+
+def get_height_bbox(ip):
+    bbox = ip["box"]
+    assert(type(bbox == np.ndarray))
+    diff_box = bbox[1] - bbox[0]
+    return diff_box[1]
 
 
 def get_ratio_bbox(ip):

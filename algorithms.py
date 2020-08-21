@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from visual import write_on_image, visualise, activity_dict, visualise_tracking
 from processor import Processor
-from helpers import pop_and_add, last_ip, dist, move_figure
+from helpers import pop_and_add, last_ip, dist, move_figure, get_hist
 from default_params import *
 from inv_pendulum import *
 import re
@@ -14,6 +14,118 @@ import pandas as pd
 from scipy.signal import savgol_filter, lfilter
 from model import LSTMModel
 import torch
+import math
+
+
+def get_source(args):
+    tagged_df = None
+    if args.video is None:
+        cam = cv2.VideoCapture(0)
+    else:
+        logging.debug(f'Video source: {args.video}')
+        cam = cv2.VideoCapture(args.video)
+        if isinstance(args.video, str):
+            vid = [int(s) for s in re.findall(r'\d+', args.video)]
+            if len(vid) == 5:
+                tagged_df = pd.read_csv("dataset/CompleteDataSet.csv", usecols=[
+                                        "TimeStamps", "Subject", "Activity", "Trial", "Tag"], skipinitialspace=True)
+                tagged_df = tagged_df.query(
+                    f'Subject == {vid[1]} & Activity == {vid[0]} & Trial == {vid[2]}')
+    img = cam.read()[1]
+    logging.debug('Image shape:', img.shape)
+    return cam, tagged_df
+
+
+def resize(img, resize, resolution):
+    # Resize the video
+    if resize is None:
+        height, width = img.shape[:2]
+    else:
+        width, height = [int(dim) for dim in resize.split('x')]
+    width_height = (int(width * resolution // 16) * 16,
+                    int(height * resolution // 16) * 16)
+    return width, height, width_height
+
+
+def extract_keypoints_parallel(queue, args, self_counter, other_counter, consecutive_frames, event):
+    try:
+        cam, tagged_df = get_source(args)
+        ret_val, img = cam.read()
+    except Exception as e:
+        queue.put(None)
+        event.set()
+        print('Exception occurred:', e)
+        print('Most likely that the video/camera doesn\'t exist')
+        return
+
+    width, height, width_height = resize(img, args.resize, args.resolution)
+    logging.debug(f'Target width and height = {width_height}')
+    processor_singleton = Processor(width_height, args)
+
+    output_video = None
+
+    frame = 0
+    fps = 0
+    t0 = time.time()
+    while not event.is_set():
+        # print(args.video,self_counter.value,other_counter.value,sep=" ")
+        if args.num_cams == 2 and (self_counter.value > other_counter.value):
+            continue
+
+        ret_val, img = cam.read()
+        frame += 1
+        self_counter.value += 1
+        if tagged_df is None:
+            curr_time = time.time()
+        else:
+            curr_time = tagged_df.iloc[frame-1]['TimeStamps'][11:]
+            curr_time = sum(x * float(t) for x, t in zip([3600, 60, 1], curr_time.split(":")))
+
+        if img is None:
+            print('no more images captured')
+            print(args.video, curr_time, sep=" ")
+            if not event.is_set():
+                event.set()
+            break
+
+        img = cv2.resize(img, (width, height))
+        hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        keypoint_sets, bb_list, width_height = processor_singleton.single_image(img)
+        assert bb_list is None or (type(bb_list) == list)
+        if bb_list:
+            assert type(bb_list[0]) == tuple
+            assert type(bb_list[0][0]) == tuple
+        # assume bb_list is a of the form [(x1,y1),(x2,y2)),etc.]
+
+        if args.coco_points:
+            keypoint_sets = [keypoints.tolist() for keypoints in keypoint_sets]
+        else:
+            anns = [get_kp(keypoints.tolist()) for keypoints in keypoint_sets]
+            ubboxes = [(np.asarray([width, height])*np.asarray(ann[1])).astype('int32')
+                       for ann in anns]
+            lbboxes = [(np.asarray([width, height])*np.asarray(ann[2])).astype('int32')
+                       for ann in anns]
+            bbox_list = [(np.asarray([width, height])*np.asarray(box)).astype('int32') for box in bb_list]
+            uhist_list = [get_hist(hsv_img, bbox) for bbox in ubboxes]
+            lhist_list = [get_hist(img, bbox) for bbox in lbboxes]
+            keypoint_sets = [{"keypoints": keyp[0], "up_hist":uh, "lo_hist":lh, "time":curr_time, "box":box}
+                             for keyp, uh, lh, box in zip(anns, uhist_list, lhist_list, bbox_list)]
+
+            cv2.polylines(img, ubboxes, True, (255, 0, 0), 2)
+            cv2.polylines(img, lbboxes, True, (0, 255, 0), 2)
+            for box in bbox_list:
+                cv2.rectangle(img, tuple(box[0]), tuple(box[1]), ((0, 0, 255)), 2)
+
+        dict_vis = {"img": img, "keypoint_sets": keypoint_sets, "width": width, "height": height, "vis_keypoints": args.joints,
+                    "vis_skeleton": args.skeleton, "CocoPointsOn": args.coco_points,
+                    "tagged_df": {"text": f"Avg FPS: {frame//(time.time()-t0)}, Frame: {frame}", "color": [0, 0, 0]}}
+        queue.put(dict_vis)
+
+    queue.put(None)
+    return
+
+
+###################################################### Post human estimation ###########################################################
 
 
 def show_tracked_img(img_dict, ip_set, num_matched, output_video, args):
@@ -28,10 +140,8 @@ def show_tracked_img(img_dict, ip_set, num_matched, output_video, args):
                          color=tagged_df["color"])
 
     if output_video is None:
-        # print(args.save_output)
         if args.save_output:
             vidname = args.video.split('/')
-            print(vidname)
             output_video = cv2.VideoWriter(filename='/'.join(vidname[:-1])+'/out'+vidname[-1][:-3]+'avi', fourcc=cv2.VideoWriter_fourcc(*'MP42'),
                                            fps=args.fps, frameSize=img.shape[:2][::-1])
             logging.debug(
@@ -42,133 +152,6 @@ def show_tracked_img(img_dict, ip_set, num_matched, output_video, args):
     else:
         output_video.write(img)
     return img, output_video
-
-
-def get_source(args, i):
-    tagged_df = None
-    if args.video is None:
-        logging.debug(f'Video source {i}: webcam')
-        cam = cv2.VideoCapture(0)
-    else:
-        logging.debug(f'Video source: {args.video}')
-        cam = cv2.VideoCapture(args.video)
-        vid = [int(s) for s in re.findall(r'\d+', args.video)]
-        if len(vid) == 5:
-            tagged_df = pd.read_csv("dataset/CompleteDataSet.csv", usecols=[
-                                    "TimeStamps", "Subject", "Activity", "Trial", "Tag"], skipinitialspace=True)
-            tagged_df = tagged_df.query(
-                f'Subject == {vid[1]} & Activity == {vid[0]} & Trial == {vid[2]}')
-    return cam, tagged_df
-
-
-def resize(img, resize, resolution):
-
-    if resize is None:
-        height, width = img.shape[:2]
-    else:
-        width, height = [int(dim) for dim in resize.split('x')]
-    width_height = (int(width * resolution // 16) * 16,
-                    int(height * resolution // 16) * 16)
-    return width, height, width_height
-
-
-def process_vidframe(queue, args, cam, tagged_df, processor_singleton, width, height, frame, t0, output_video):
-
-    ret_val, img = cam.read()
-    if tagged_df is None:
-        curr_time = time.time()
-    else:
-        curr_time = tagged_df.iloc[frame-1]['TimeStamps'][11:]
-        curr_time = sum(x * float(t) for x, t in zip([3600, 60, 1], curr_time.split(":")))
-
-    if img is None:
-        print('no more images captured')
-        queue.put(None)
-        print(args.video, curr_time, sep=" ")
-        return False
-
-    if cv2.waitKey(1) == 27 or cv2.getWindowProperty(args.video, cv2.WND_PROP_VISIBLE) < 1:
-        queue.put(None)
-        return False
-
-    img = cv2.resize(img, (width, height))
-
-    keypoint_sets, scores, width_height = processor_singleton.single_image(
-        b64image=base64.b64encode(cv2.imencode('.jpg', img)[1]).decode('UTF-8')
-    )
-
-    if args.coco_points:
-        keypoint_sets = [keypoints.tolist() for keypoints in keypoint_sets]
-    else:
-        keypoint_sets = [(get_kp(keypoints.tolist()), curr_time) for keypoints in keypoint_sets]
-
-    queue.put(keypoint_sets)
-    img = visualise(img=img, keypoint_sets=keypoint_sets, width=width, height=height, vis_keypoints=args.joints,
-                    vis_skeleton=args.skeleton, CocoPointsOn=args.coco_points)
-
-    if tagged_df is None:
-        img = write_on_image(
-            img=img, text=f"Avg FPS: {frame//(time.time()-t0)}, Frame: {frame}", color=[0, 0, 0])
-    else:
-        img = write_on_image(img=img,
-                             text=f"Avg FPS: {frame//(time.time()-t0)}, Frame: {frame}, Tag: {activity_dict[tagged_df.iloc[frame-1]['Tag']]}",
-                             color=[0, 0, 0])
-
-    if output_video is None:
-        if args.save_output:
-            output_video = cv2.VideoWriter(filename=args.out_path, fourcc=cv2.VideoWriter_fourcc(*'MP42'),
-                                           fps=args.fps, frameSize=img.shape[:2][::-1])
-            logging.debug(
-                f'Saving the output video at {args.out_path} with {args.fps} frames per seconds')
-        else:
-            output_video = None
-            logging.debug(f'Not saving the output video')
-    else:
-        output_video.write(img)
-    cv2.imshow(args.video, img)
-
-    return True
-
-
-def extract_keypoints_sequential(queue1, queue2, args1, args2, consecutive_frames=DEFAULT_CONSEC_FRAMES):
-    print('main started')
-
-    cam1, tagged_df1 = get_source(args1, 1)
-    cam2, tagged_df2 = get_source(args2, 2)
-    ret_val1, img1 = cam1.read()
-    ret_val2, img2 = cam2.read()
-    # Resize the video
-    width1, height1, width_height1 = resize(img1, args1.resize, args2.resolution)
-    width2, height2, width_height2 = resize(img2, args2.resize, args2.resolution)
-
-    # width_height = (width, height)
-    logging.debug(f'Target width and height 1 = {width_height1}')
-    processor_singleton1 = Processor(width_height1, args1)
-    logging.debug(f'Target width and height 1 = {width_height2}')
-    processor_singleton2 = Processor(width_height2, args2)
-    output_video1 = None
-    output_video2 = None
-    frame = 0
-    fps = 0
-    t0 = time.time()
-    cv2.namedWindow(args1.video)
-    cv2.namedWindow(args2.video)
-    max_time = 30
-
-    while time.time() - t0 < max_time:
-        # print(args.video,self_counter.value,other_counter.value,sep=" ")
-        result1 = process_vidframe(queue1, args1, cam1, tagged_df1,
-                                   processor_singleton1, width1, height1, frame, t0, output_video1)
-        result2 = process_vidframe(queue2, args2, cam2, tagged_df2,
-                                   processor_singleton2, width2, height2, frame, t0, output_video2)
-        if not result1 or not result2:
-            break
-        frame += 1
-    cv2.destroyAllWindows()
-    queue1.put(None)
-    queue2.put(None)
-    print(f"Frames in {max_time}secs: {frame}")
-    return
 
 
 def remove_wrongly_matched(matched_1, matched_2):
@@ -209,8 +192,8 @@ def match_unmatched(unmatched_1, unmatched_2, lstm_set1, lstm_set2, num_matched)
     freelist_1 = [i for i in range(len(unmatched_1))]
     pair_21 = [-1]*len(unmatched_2)
     unmatched_1_preferences = np.argsort(-correlation_matrix, axis=1)
-    print("cor", correlation_matrix, sep="\n")
-    print("unmatched_1", unmatched_1_preferences, sep="\n")
+    # print("cor", correlation_matrix, sep="\n")
+    # print("unmatched_1", unmatched_1_preferences, sep="\n")
     unmatched_indexes1 = [0]*len(unmatched_1)
     finish_array = [False]*len(unmatched_1)
     while freelist_1:
@@ -243,19 +226,18 @@ def match_unmatched(unmatched_1, unmatched_2, lstm_set1, lstm_set2, num_matched)
             new_lstm1.append(lstm_set1[i])
             new_lstm2.append(lstm_set2[j])
 
-    print("finalpairs", final_pairs, sep="\n")
+    # print("finalpairs", final_pairs, sep="\n")
 
     return final_pairs, new_matched_1, new_matched_2, new_lstm1, new_lstm2
 
 
-def alg2_sequential(queues, argss, consecutive_frames=DEFAULT_CONSEC_FRAMES):
+def alg2_sequential(queues, argss, consecutive_frames, event):
     model = LSTMModel(h_RNN=32, h_RNN_layers=2, drop_p=0.2, num_classes=7)
-    model.load_state_dict(torch.load('lstm.sav'))
+    model.load_state_dict(torch.load('lstm2.sav'))
     model.eval()
     output_videos = [None for _ in range(argss[0].num_cams)]
     t0 = time.time()
     feature_plotters = [[[], [], [], [], []] for _ in range(argss[0].num_cams)]
-    # feature_plotter2 = [[], [], [], [], []]
     ip_sets = [[] for _ in range(argss[0].num_cams)]
     lstm_sets = [[] for _ in range(argss[0].num_cams)]
     max_length_mat = 300
@@ -265,24 +247,23 @@ def alg2_sequential(queues, argss, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     else:
         f, ax = plt.subplots()
         move_figure(f, 800, 100)
-
-    # cv2.namedWindow(args1.video)
-    # cv2.namedWindow(args2.video)
-    [cv2.namedWindow(args.video) for args in argss]
+    window_names = [args.video if isinstance(args.video, str) else 'Cam '+str(args.video) for args in argss]
+    [cv2.namedWindow(window_name) for window_name in window_names]
     while True:
+
         # if not queue1.empty() and not queue2.empty():
-        if not any([q.empty() for q in queues]):
+        if not any(q.empty() for q in queues):
             dict_frames = [q.get() for q in queues]
-            # dict_frame1 = queue1.get()
-            # dict_frame2 = queue2.get()
-            # if dict_frame1 is None or dict_frame2 is None:
+
             if any([(dict_frame is None) for dict_frame in dict_frames]):
+                if not event.is_set():
+                    event.set()
                 break
 
-            if cv2.waitKey(1) == 27 or any(cv2.getWindowProperty(args.video, cv2.WND_PROP_VISIBLE) < 1 for args in argss):
-                break
-            # if cv2.waitKey(1) == 27 or cv2.getWindowProperty(args2.video, cv2.WND_PROP_VISIBLE) < 1:
-            #     break
+            if cv2.waitKey(1) == 27 or any(cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1 for window_name in window_names):
+                if not event.is_set():
+                    event.set()
+
             kp_frames = [dict_frame["keypoint_sets"] for dict_frame in dict_frames]
             if argss[0].num_cams == 1:
                 num_matched, new_num, indxs_unmatched = match_ip(ip_sets[0], kp_frames[0], lstm_sets[0], num_matched, max_length_mat)
@@ -290,11 +271,9 @@ def alg2_sequential(queues, argss, consecutive_frames=DEFAULT_CONSEC_FRAMES):
                 dict_frames[0]["tagged_df"]["text"] += f" Pred: {activity_dict[prediction+5]}"
                 img, output_videos[0] = show_tracked_img(dict_frames[0], ip_sets[0], num_matched, output_videos[0], argss[0])
                 # print(img1.shape)
-                cv2.imshow(argss[0].video, img)
+                cv2.imshow(window_names[0], img)
 
             elif argss[0].num_cams == 2:
-                # kp_frame1 = dict_frame1["keypoint_sets"]
-                # kp_frame2 = dict_frame2["keypoint_sets"]
                 num_matched, new_num, indxs_unmatched1 = match_ip(ip_sets[0], kp_frames[0], lstm_sets[0], num_matched, max_length_mat)
                 assert(new_num == len(ip_sets[0]))
                 for i in sorted(indxs_unmatched1, reverse=True):
@@ -369,8 +348,8 @@ def alg2_sequential(queues, argss, consecutive_frames=DEFAULT_CONSEC_FRAMES):
                 img1, output_videos[0] = show_tracked_img(dict_frames[0], ip_sets[0], num_matched, output_videos[0], argss[0])
                 img2, output_videos[1] = show_tracked_img(dict_frames[1], ip_sets[1], num_matched, output_videos[1], argss[1])
                 # print(img1.shape)
-                cv2.imshow(argss[0].video, img1)
-                cv2.imshow(argss[1].video, img2)
+                cv2.imshow(window_names[0], img1)
+                cv2.imshow(window_names[1], img2)
 
                 assert(len(lstm_sets[0]) == len(ip_sets[0]))
                 assert(len(lstm_sets[1]) == len(ip_sets[1]))
@@ -386,9 +365,9 @@ def alg2_sequential(queues, argss, consecutive_frames=DEFAULT_CONSEC_FRAMES):
             #         else:
             #             # print("None")
             #             feature_plotter[cnt].append(0)
-            DEBUG = True
+            # DEBUG = True
 
-    # cv2.destroyAllWindows()
+    cv2.destroyAllWindows()
     # for feature_plotter in feature_plotters:
     #     for i, feature_arr in enumerate(feature_plotter):
     #         plt.clf()
@@ -412,7 +391,7 @@ def alg2_sequential(queues, argss, consecutive_frames=DEFAULT_CONSEC_FRAMES):
     #     # if len(re_matrix1[0]) > 0:
     #     #     print(np.linalg.norm(ip_sets[0][0][-1][0]['B']-ip_sets[0][0][-1][0]['H']))
 
-    print("P2 Over")
+    # print("P2 Over")
     del model
     return
 
@@ -420,7 +399,7 @@ def alg2_sequential(queues, argss, consecutive_frames=DEFAULT_CONSEC_FRAMES):
 def get_all_features(ip_set, lstm_set, model):
     valid_idxs = []
     invalid_idxs = []
-    prediction = 15
+    predictions = [15]*len(ip_set)  # 15 is the tag for None
 
     for i, ips in enumerate(ip_set):
         # ip set for a particular person
@@ -438,11 +417,12 @@ def get_all_features(ip_set, lstm_set, model):
         else:
             ips[-1]["features"] = {}
             # get re, gf, angle, bounding box ratio, ratio derivative
-
+            ips[-1]["features"]["height_bbox"] = get_height_bbox(ips[-1])
             ips[-1]["features"]["ratio_bbox"] = FEATURE_SCALAR["ratio_bbox"]*get_ratio_bbox(ips[-1])
 
             body_vector = ips[-1]["keypoints"]["N"] - ips[-1]["keypoints"]["B"]
             ips[-1]["features"]["angle_vertical"] = FEATURE_SCALAR["angle_vertical"]*get_angle_vertical(body_vector)
+            # print(ips[-1]["features"]["angle_vertical"])
             ips[-1]["features"]["log_angle"] = FEATURE_SCALAR["log_angle"]*np.log(1 + np.abs(ips[-1]["features"]["angle_vertical"]))
 
             if last1 is None:
@@ -451,7 +431,6 @@ def get_all_features(ip_set, lstm_set, model):
             else:
                 ips[-1]["features"]["re"] = FEATURE_SCALAR["re"]*get_rot_energy(ips[last1], ips[-1])
                 ips[-1]["features"]["ratio_derivative"] = FEATURE_SCALAR["ratio_derivative"]*get_ratio_derivative(ips[last1], ips[-1])
-
                 if last2 is None:
                     invalid_idxs.append(i)
                     # continue
@@ -473,12 +452,33 @@ def get_all_features(ip_set, lstm_set, model):
 
         xdata = torch.Tensor(xdata).view(-1, 1, 5)
         # what is ips[-2] is none
-        outputs, lstm_set[i] = model(xdata, lstm_set[i])
+        outputs, lstm_set[i][0] = model(xdata, lstm_set[i][0])
         if i == 0:
             prediction = torch.max(outputs.data, 1)[1][0].item()
-        # break
+            if prediction in [1, 2, 3, 5]:
+                lstm_set[i][3] = 0
+                if lstm_set[i][2] < EMA_FRAMES:
+                    if ips[-1] is not None:
+                        lstm_set[i][2] += 1
+                        lstm_set[i][1] = (lstm_set[i][1]*(lstm_set[i][2]-1) + get_height_bbox(ips[-1]))/lstm_set[i][2]
+                else:
+                    if ips[-1] is not None:
+                        lstm_set[i][1] = (1-EMA_BETA)*get_height_bbox(ips[-1]) + EMA_BETA*lstm_set[i][1]
 
-    return valid_idxs, prediction
+            elif prediction == 0:
+                if ips[-1] is not None and lstm_set[i][1] != 0 and \
+                        abs(ips[-1]["features"]["angle_vertical"]) < math.pi/4:
+                        # (get_height_bbox(ips[-1]) > 2*lstm_set[i][1]/3 or abs(ips[-1]["features"]["angle_vertical"]) < math.pi/4):
+                    prediction = 7
+                else:
+                    lstm_set[i][3] += 1
+                    if lstm_set[i][3] < DEFAULT_CONSEC_FRAMES//4:
+                        prediction = 7
+            else:
+                lstm_set[i][3] = 0
+            predictions[i] = prediction
+
+    return valid_idxs, predictions[0] if len(predictions) > 0 else 15
 
 
 def get_frame_features(ip_set, new_frame, re_matrix, gf_matrix, num_matched, max_length_mat=DEFAULT_CONSEC_FRAMES):
