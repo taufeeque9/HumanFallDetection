@@ -1,35 +1,34 @@
 # HumanFallDetection
+We augment human pose estimation
+(openpifpaf library) by support for multi-camera and multi-person tracking and a long short-term memory (LSTM)
+neural network to predict two classes: “Fall” or “No Fall”. From the poses, we extract five temporal and spatial
+features which are processed by an LSTM classifier.
+<p align="center">
+<img src="examples/fall.gif" width="420" />
+</p>
 
-## Pose Detection Interface
-Requirement: OpenPifPaf (pip3 install openpifpaf) <br>
+## Setup
+
+```shell script
+pip install -r requirements.txt
+```
 
 ## Usage
-### fall_detector.py
-#### To just see the COCO pointset on webcam: <br>
-python3 fall_detector.py --coco_points
-#### To run the code on a video: <br>
-python3 fall_detector.py --video=path/to/video.mp4
-#### To run on resnet18:
-python3 fall_detector.py --checkpoint=resnet18
-#### To plot the features of webcam: <br>
-python3 fall_detector.py --plot_graph
-#### To plot the features of a video: <br>
-python3 fall_detector.py --plot_graph --video=path/to/video.mp4
-
-### process_data.py
-#### To plot the features of activity 1 of subjects 1 to 10:
-python3 process_data.py --activity1 --sub_range=1,11
-
-## Avg FPS
+```shell script
+python3 fall_detector.py
+```
 <TABLE>
-<TR><TH></TH><TH>Resnet18</TH><TH>Resnet50</TH></TR>
-<TR><TH>With CUDA</TH><TD>18</TD><TD>9</TD></TR>
-<TR><TH>Without CUDA</TH><TD>8</TD><TD>4</TD></TR>
+<TR><TH style="width:120px">Argument</TH><TH>Description</TH><TH>Default</TH></TR>
+<TR><TD>--num_cams</TD> <TD>Number of Cameras/Videos to process</TD><TD>1</TD></TR>
+<TR><TD>--video</TD><TD>Path to the video file (None to capture live video from camera(s)) <br>For single video fall
+                        detection(--num_cams=1), save your videos as abc.xyz
+                        and set --video=abc.xyz<br> For 2 video fall
+                        detection(--num_cams=2), save your videos as abc1.xyz
+                        & abc2.xyz & set --video=abc.xyz</TD><TD>None</TD></TR>
+<TR><TD>--save_output</TD> <TD>Save the result in a video file. Output videos are
+                        saved in the same directory as input videos with "out"
+                        appended at the start of the title</TD><TD>False</TD></TR>
+<TR><TD>--disable_cuda</TD> <TD>To process frames on CPU by disabling CUDA support on GPU</TD><TD>False</TD></TR>
 </TABLE>
 
-## References:
-https://github.com/vita-epfl/openpifpaf
-
-https://github.com/samkit-jain/physio-pose/blob/master/physio.py
-
-https://colab.research.google.com/drive/1H8T4ZE6wc0A9xJE4oGnhgHpUpAH5HL7W#scrollTo=6O_hZNsW7hwV
+## Examples
