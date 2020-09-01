@@ -233,7 +233,7 @@ def match_unmatched(unmatched_1, unmatched_2, lstm_set1, lstm_set2, num_matched)
 
 def alg2_sequential(queues, argss, consecutive_frames, event):
     model = LSTMModel(h_RNN=32, h_RNN_layers=2, drop_p=0.2, num_classes=7)
-    model.load_state_dict(torch.load('lstm2.sav'))
+    model.load_state_dict(torch.load('lstm2.sav',map_location=argss[0].device))
     model.eval()
     output_videos = [None for _ in range(argss[0].num_cams)]
     t0 = time.time()
