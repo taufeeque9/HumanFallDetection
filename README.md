@@ -18,17 +18,17 @@ pip install -r requirements.txt
 python3 fall_detector.py
 ```
 <TABLE>
-<TR><TH style="width:120px">Argument</TH><TH>Description</TH><TH>Default</TH></TR>
-<TR><TD>--num_cams</TD> <TD>Number of Cameras/Videos to process</TD><TD>1</TD></TR>
-<TR><TD>--video</TD><TD>Path to the video file (None to capture live video from camera(s)) <br>For single video fall
+<TR><TH style="width:120px">Argument</TH><TH style="width:300px">Description</TH><TH>Default</TH></TR>
+<TR><TD>num_cams</TD> <TD>Number of Cameras/Videos to process</TD><TD>1</TD></TR>
+<TR><TD>video</TD><TD>Path to the video file (None to capture live video from camera(s)) <br>For single video fall
                         detection(--num_cams=1), save your videos as abc.xyz
                         and set --video=abc.xyz<br> For 2 video fall
                         detection(--num_cams=2), save your videos as abc1.xyz
                         & abc2.xyz & set --video=abc.xyz</TD><TD>None</TD></TR>
-<TR><TD>--save_output</TD> <TD>Save the result in a video file. Output videos are
+<TR><TD>save_output</TD> <TD>Save the result in a video file. Output videos are
                         saved in the same directory as input videos with "out"
                         appended at the start of the title</TD><TD>False</TD></TR>
-<TR><TD>--disable_cuda</TD> <TD>To process frames on CPU by disabling CUDA support on GPU</TD><TD>False</TD></TR>
+<TR><TD>disable_cuda</TD> <TD>To process frames on CPU by disabling CUDA support on GPU</TD><TD>False</TD></TR>
 </TABLE>
 
 ## Examples
