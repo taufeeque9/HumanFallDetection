@@ -6,12 +6,12 @@ dataclasses==0.7
 future==0.18.2
 idna==2.10
 kiwisolver==1.2.0
-matplotlib==3.3.1
-numpy==1.19.1
+matplotlib>=3.3.1
+numpy>=1.19.1
 opencv-python==4.2.0.34
-openpifpaf==0.11.9
-pandas==1.1.1
-Pillow==7.2.0
+openpifpaf>=0.11.7
+pandas>=1.1.1
+Pillow>=7.2.0
 pyparsing==2.4.7
 pysparkling==0.6.0
 python-dateutil==2.8.1
@@ -20,6 +20,6 @@ pytz==2020.1
 requests==2.24.0
 scipy==1.5.2
 six==1.15.0
-torch==1.6.0
-torchvision==0.7.0
+torch>=1.6.0
+torchvision>=0.7.0
 urllib3==1.25.10

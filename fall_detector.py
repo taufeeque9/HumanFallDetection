@@ -136,7 +136,7 @@ class FallDetector:
 
         if not self.args.coco_points:
             process2.join()
-        print('Ending...')
+        print('Exiting...')
         return
 
 
