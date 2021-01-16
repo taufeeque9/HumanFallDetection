@@ -1,4 +1,4 @@
-from visual import CocoPart
+from .visual import CocoPart
 import numpy as np
 from helpers import *
 from default_params import *
