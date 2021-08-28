@@ -148,9 +148,9 @@ def get_kp(kp):
         lbbox = ([0, 0], [0, 0])
         #ubbox = None
         #lbbox = None
-    condition = (inv_pend["H"] is None) and (inv_pend['N'] is not None and inv_pend['B'] is not None)
-    if condition:
-        print("half disp")
+    # condition = (inv_pend["H"] is None) and (inv_pend['N'] is not None and inv_pend['B'] is not None)
+    # if condition:
+    #     print("half disp")
 
     return inv_pend, ubbox, lbbox
 

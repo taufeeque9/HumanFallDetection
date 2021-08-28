@@ -13,7 +13,6 @@ import matplotlib.pyplot as plt
 
 try:
     mp.set_start_method('spawn')
-
 except RuntimeError:
     pass
 
@@ -28,10 +27,9 @@ class FallDetector:
             description=__doc__,
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
-        # TODO: Verify the args since they were changed in v0.10.0
-        openpifpaf.decoder.cli(parser, force_complete_pose=True,
-                               instance_threshold=0.2, seed_threshold=0.5)
-        openpifpaf.network.cli(parser)
+
+        openpifpaf.network.Factory.cli(parser)
+        openpifpaf.decoder.cli(parser)
         parser.add_argument('--resolution', default=0.4, type=float,
                             help=('Resolution prescale factor from 640x480. '
                                   'Will be rounded to multiples of 16.'))
@@ -68,6 +66,10 @@ class FallDetector:
         # Log
         logging.basicConfig(level=logging.INFO if not args.debug else logging.DEBUG)
 
+        args.force_complete_pose = True
+        args.instance_threshold = 0.2
+        args.seed_threshold = 0.5
+
         # Add args.device
         args.device = torch.device('cpu')
         args.pin_memory = False
@@ -77,6 +79,9 @@ class FallDetector:
 
         if args.checkpoint is None:
             args.checkpoint = 'shufflenetv2k16w'
+
+        openpifpaf.decoder.configure(args)
+        openpifpaf.network.Factory.configure(args)
 
         return args
 

@@ -13,9 +13,9 @@ class Processor(object):
         self.width_height = width_height
 
         # Load model
-        self.model, _ = openpifpaf.network.factory_from_args(args)
-        self.model = self.model.to(args.device)
-        self.processor = openpifpaf.decoder.factory_from_args(args, self.model)
+        self.model_cpu, _ = openpifpaf.network.Factory().factory()
+        self.model = self.model_cpu.to(args.device)
+        self.processor = openpifpaf.decoder.factory(self.model_cpu.head_metas)
         # print(self.processor.device)
         self.device = args.device
 
