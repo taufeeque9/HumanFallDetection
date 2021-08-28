@@ -31,4 +31,12 @@ python3 fall_detector.py
 <TR><TD>disable_cuda</TD> <TD>To process frames on CPU by disabling CUDA support on GPU</TD><TD>False</TD></TR>
 </TABLE>
 
-## Examples
+## Citation
+Please cite the following paper in your publications if our work has helped your research: <br> [Multi-camera, multi-person, and real-time fall detection using long short term memory](https://doi.org/10.1117/12.2580700)
+
+    @inproceedings{Taufeeque2021MulticameraMA,
+                    title={Multi-camera, multi-person, and real-time fall detection using long short term memory},
+                    author={Mohammad Taufeeque and Samad Koita and N. Spicher and T. Deserno},
+                    booktitle={Medical Imaging},
+                    year={2021}
+                  }
