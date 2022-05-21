@@ -34,9 +34,16 @@ python3 fall_detector.py
 ## Citation
 Please cite the following paper in your publications if our work has helped your research: <br> [Multi-camera, multi-person, and real-time fall detection using long short term memory](https://doi.org/10.1117/12.2580700)
 
+                  
     @inproceedings{Taufeeque2021MulticameraMA,
-                    title={Multi-camera, multi-person, and real-time fall detection using long short term memory},
-                    author={Mohammad Taufeeque and Samad Koita and N. Spicher and T. Deserno},
-                    booktitle={Medical Imaging},
-                    year={2021}
+                    author = {Mohammad Taufeeque and Samad Koita and Nicolai Spicher and Thomas M. Deserno},
+                    title = {{Multi-camera, multi-person, and real-time fall detection using long short term memory}},
+                    volume = {11601},
+                    booktitle = {Medical Imaging 2021: Imaging Informatics for Healthcare, Research, and Applications},
+                    organization = {International Society for Optics and Photonics},
+                    publisher = {SPIE},
+                    pages = {35 -- 42},
+                    year = {2021},
+                    doi = {10.1117/12.2580700},
+                    URL = {https://doi.org/10.1117/12.2580700}
                   }
