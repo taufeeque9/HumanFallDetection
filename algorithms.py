@@ -141,11 +141,18 @@ def show_tracked_img(img_dict, ip_set, num_matched, output_video, args):
 
     if output_video is None:
         if args.save_output:
-            vidname = args.video.split('/')
-            output_video = cv2.VideoWriter(filename='/'.join(vidname[:-1])+'/out'+vidname[-1][:-3]+'avi', fourcc=cv2.VideoWriter_fourcc(*'MP42'),
+            if isinstance(args.video, int):
+                vidname = [str(args.video)+'.avi']
+            else:
+                vidname = args.video.split('/')
+            filename = '/'.join(vidname[:-1])
+            if filename:
+                filename += '/'
+            filename += 'out' + vidname[-1][:-3] + 'avi'
+            output_video = cv2.VideoWriter(filename=filename, fourcc=cv2.VideoWriter_fourcc(*'MP42'),
                                            fps=args.fps, frameSize=img.shape[:2][::-1])
             logging.debug(
-                f'Saving the output video at {args.out_path} with {args.fps} frames per seconds')
+                f'Saving the output video at {filename} with {args.fps} frames per seconds')
         else:
             output_video = None
             logging.debug(f'Not saving the output video')
