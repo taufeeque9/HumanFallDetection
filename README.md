@@ -31,6 +31,10 @@ python3 fall_detector.py
 <TR><TD>disable_cuda</TD> <TD>To process frames on CPU by disabling CUDA support on GPU</TD><TD>False</TD></TR>
 </TABLE>
 
+## Dataset
+We used the [UP-Fall Detection](https://sites.google.com/up.edu.mx/har-up/) to train the LSTM model. You can use [this](https://colab.research.google.com/drive/1PbzVZnwBzFK_CcMf5G3dFrjwKZgfK3Vy?usp=sharing) Colab notebook to download the download the dataset and compile the files into videos.
+
+
 ## Citation
 Please cite the following paper in your publications if our work has helped your research: <br> [Multi-camera, multi-person, and real-time fall detection using long short term memory](https://doi.org/10.1117/12.2580700)
 
