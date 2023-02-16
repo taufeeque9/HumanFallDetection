@@ -15,6 +15,7 @@ from scipy.signal import savgol_filter, lfilter
 from model.model import LSTMModel
 import torch
 import math
+from multiprocessing import shared_memory
 
 
 def get_source(args):
@@ -298,6 +299,10 @@ def match_unmatched(unmatched_1, unmatched_2, lstm_set1, lstm_set2, num_matched)
 
 
 def alg2_sequential(queues, argss, consecutive_frames, event):
+    """
+    This is the main function for the algorithm 2
+    This returns the output video and the output video writer
+    """
     model = LSTMModel(h_RNN=48, h_RNN_layers=2, drop_p=0.1, num_classes=7)
     model.load_state_dict(
         torch.load("model/lstm_weights.sav", map_location=argss[0].device)
@@ -338,6 +343,12 @@ def alg2_sequential(queues, argss, consecutive_frames, event):
                     event.set()
 
             kp_frames = [dict_frame["keypoint_sets"] for dict_frame in dict_frames]
+
+            """
+            여기가 메인 프로세스. prediction을 여기서 구할 수 있다.
+            """
+            # Todo: prediction을 다른 프로세스로 보낼 방법을 찾아야함. e.g. 공유메모리
+            # Todo: 화면 속 객체의 좌표를 구해야함.
             if argss[0].num_cams == 1:
                 num_matched, new_num, indxs_unmatched = match_ip(
                     ip_sets[0], kp_frames[0], lstm_sets[0], num_matched, max_length_mat
@@ -345,6 +356,9 @@ def alg2_sequential(queues, argss, consecutive_frames, event):
                 valid1_idxs, prediction = get_all_features(
                     ip_sets[0], lstm_sets[0], model
                 )
+
+                # Todo: update the value of prediction to shared_memory which name is 'prediction'
+
                 dict_frames[0]["tagged_df"][
                     "text"
                 ] += f" Pred: {activity_dict[prediction+5]}"

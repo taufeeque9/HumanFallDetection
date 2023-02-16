@@ -10,6 +10,7 @@ from algorithms import *
 from helpers import last_ip
 import os
 import matplotlib.pyplot as plt
+from multiprocessing import shared_memory
 
 try:
     mp.set_start_method("spawn")
@@ -227,5 +228,6 @@ class FallDetector:
 
 
 if __name__ == "__main__":
+    shm = shared_memory.SharedMemory(name="prediction", create=True, size=100000)
     f = FallDetector()
     f.begin()
