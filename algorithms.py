@@ -208,7 +208,6 @@ def show_tracked_img(img_dict, ip_set, num_matched, output_video, args):
 
 
 def remove_wrongly_matched(matched_1, matched_2):
-
     unmatched_idxs = []
     i = 0
 
@@ -227,7 +226,6 @@ def remove_wrongly_matched(matched_1, matched_2):
 
 
 def match_unmatched(unmatched_1, unmatched_2, lstm_set1, lstm_set2, num_matched):
-
     new_matched_1 = []
     new_matched_2 = []
     new_lstm1 = []
@@ -323,7 +321,6 @@ def alg2_sequential(queues, argss, consecutive_frames, event):
     ]
     [cv2.namedWindow(window_name) for window_name in window_names]
     while True:
-
         # if not queue1.empty() and not queue2.empty():
         if not any(q.empty() for q in queues):
             dict_frames = [q.get() for q in queues]
@@ -512,6 +509,9 @@ def alg2_sequential(queues, argss, consecutive_frames, event):
 
 
 def get_all_features(ip_set, lstm_set, model):
+    """
+    returns valid_idxs, predictions (15 is the tag for None)
+    """
     valid_idxs = []
     invalid_idxs = []
     predictions = [15] * len(ip_set)  # 15 is the tag for None
@@ -632,7 +632,6 @@ def get_frame_features(
     num_matched,
     max_length_mat=DEFAULT_CONSEC_FRAMES,
 ):
-
     match_ip(ip_set, new_frame, re_matrix, gf_matrix, max_length_mat)
     return
     for i in range(len(ip_set)):
@@ -682,7 +681,6 @@ def get_frame_features(
             )
 
         else:
-
             pop_and_add(gf_matrix[i], 0, max_length_mat)
 
     return

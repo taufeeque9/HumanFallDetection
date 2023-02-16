@@ -120,6 +120,7 @@ class FallDetector:
             args.device = torch.device("cuda")
             args.pin_memory = True
 
+        # Add mps to run on m1 -> not work
         if not args.disable_cuda and torch.backends.mps.is_available():
             args.device = torch.device("mps")
             args.pin_memory = True
