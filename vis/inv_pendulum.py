@@ -273,14 +273,14 @@ def get_gf(ip0, ip1, ip2):
 
 def get_height_bbox(ip):
     bbox = ip["box"]
-    assert(type(bbox == np.ndarray))
+    assert isinstance(bbox, np.ndarray)
     diff_box = bbox[1] - bbox[0]
     return diff_box[1]
 
 
 def get_ratio_bbox(ip):
     bbox = ip["box"]
-    assert(type(bbox == np.ndarray))
+    assert isinstance(bbox, np.ndarray)
     diff_box = bbox[1] - bbox[0]
     if diff_box[1] == 0:
         diff_box[1] += 1e5*diff_box[0]
